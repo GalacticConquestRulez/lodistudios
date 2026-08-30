@@ -4,7 +4,7 @@
   "album": "Dear Mirror Part 2 - Single",
   "artistDisplay": "Lodi",
   "albumDisplay": "Dear Mirror Part 2 - Single",
-  "songPath": "http://159.223.127.113/mediaplayer/songs/Dear_Mirror_Part_2.mp3",
-  "albumArtPath": "http://159.223.127.113/mediaplayer/albumart/dear_mirror_part_2_AlbumArt.jpg",
+  "songPath": "/mediaplayer/songs/Dear_Mirror_Part_2.mp3",
+  "albumArtPath": "/mediaplayer/albumart/dear_mirror_part_2_AlbumArt.jpg",
   "uploadedAt": "2025-07-01T21:05:30.574Z"
 }

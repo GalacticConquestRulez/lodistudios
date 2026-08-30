@@ -1,28 +1,63 @@
-const fs = require("fs");
-const path = require("path");
+#!/usr/bin/env node
+/* Rebuilds index.json from the individual song metadata files.
+   Run after adding or editing anything in this directory:
+       node /var/www/lodistudios/mediaplayer/meta/generateIndex.js
+   The uploader calls this automatically after each successful upload. */
 
-const metaDir = __dirname;
-const indexPath = path.join(metaDir, "index.json");
+const fs = require('fs');
+const path = require('path');
 
-fs.readdir(metaDir, (err, files) => {
-  if (err) {
-    console.error("Failed to read meta directory:", err);
-    return;
+const META_DIR = __dirname;
+const INDEX_PATH = path.join(META_DIR, 'index.json');
+const REQUIRED = ['songname', 'songPath'];
+
+function build() {
+  const files = fs.readdirSync(META_DIR)
+    .filter((f) => f.endsWith('.json') && f !== 'index.json');
+
+  const songs = [];
+  const skipped = [];
+
+  for (const filename of files) {
+    try {
+      const song = JSON.parse(fs.readFileSync(path.join(META_DIR, filename), 'utf8'));
+      const missing = REQUIRED.filter((k) => !song[k]);
+      if (missing.length) {
+        skipped.push(`${filename} (missing ${missing.join(', ')})`);
+        continue;
+      }
+      // Keep paths host-relative so the player works over http, https and any domain.
+      for (const key of ['songPath', 'albumArtPath']) {
+        if (typeof song[key] === 'string') song[key] = song[key].replace(/^https?:\/\/[^/]+/, '');
+      }
+      songs.push(song);
+    } catch (err) {
+      skipped.push(`${filename} (${err.message})`);
+    }
   }
 
-  const jsonFiles = files.filter(f => f.endsWith(".json") && f !== "index.json");
+  songs.sort((a, b) =>
+    String(a.artistDisplay || a.artist || '').localeCompare(String(b.artistDisplay || b.artist || '')) ||
+    String(a.songname).localeCompare(String(b.songname))
+  );
 
-  const metadataList = jsonFiles.map(filename => {
-    const filePath = path.join(metaDir, filename);
-    const rawData = fs.readFileSync(filePath);
-    try {
-      return JSON.parse(rawData);
-    } catch (err) {
-      console.error(`Failed to parse ${filename}:`, err);
-      return null;
-    }
-  }).filter(Boolean); // Remove null entries
+  // Write to a temp file then rename, so a reader never sees a half-written index.
+  const tmp = `${INDEX_PATH}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(songs, null, 2) + '\n');
+  fs.renameSync(tmp, INDEX_PATH);
 
-  fs.writeFileSync(indexPath, JSON.stringify(metadataList, null, 2));
-  console.log(`✅ index.json created with ${metadataList.length} songs.`);
-});
+  return { count: songs.length, skipped };
+}
+
+if (require.main === module) {
+  try {
+    const { count, skipped } = build();
+    console.log(`index.json rebuilt with ${count} song(s).`);
+    skipped.forEach((s) => console.warn(`  skipped: ${s}`));
+  } catch (err) {
+    console.error('Failed to rebuild index.json:', err.message);
+    process.exit(1);
+  }
+}
+
+module.exports = { build };

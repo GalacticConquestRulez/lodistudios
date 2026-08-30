@@ -4,7 +4,7 @@
   "album": "Rearview Skies",
   "artistDisplay": "Lodi",
   "albumDisplay": "Rearview Skies",
-  "songPath": "http://159.223.127.113/mediaplayer/songs/Monopoly_Tears_Audio.mp3",
-  "albumArtPath": "http://159.223.127.113/mediaplayer/albumart/monopoly_tears_AlbumArt.jpg",
+  "songPath": "/mediaplayer/songs/Monopoly_Tears_Audio.mp3",
+  "albumArtPath": "/mediaplayer/albumart/monopoly_tears_AlbumArt.jpg",
   "uploadedAt": "2025-06-06T17:29:40.871Z"
 }

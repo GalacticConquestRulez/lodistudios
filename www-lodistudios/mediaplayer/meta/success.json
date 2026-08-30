@@ -4,7 +4,7 @@
   "album": "Success - Single",
   "artistDisplay": "Lodi",
   "albumDisplay": "Success - Single",
-  "songPath": "http://159.223.127.113/mediaplayer/songs/Success.mp3",
-  "albumArtPath": "http://159.223.127.113/mediaplayer/albumart/success_AlbumArt.jpg",
+  "songPath": "/mediaplayer/songs/Success.mp3",
+  "albumArtPath": "/mediaplayer/albumart/success_AlbumArt.jpg",
   "uploadedAt": "2025-07-08T03:56:49.880Z"
 }

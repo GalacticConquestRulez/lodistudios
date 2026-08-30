@@ -34,3 +34,6 @@ id_rsa*
 *.sqlite3
 *.sql
 *.dump
+
+# Uploader scratch space
+www-lodistudios/upload/tmp/

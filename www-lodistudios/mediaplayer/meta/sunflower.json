@@ -4,7 +4,7 @@
   "album": "Rearview Skies",
   "artistDisplay": "Lodi",
   "albumDisplay": "Rearview Skies",
-  "songPath": "http://159.223.127.113/mediaplayer/songs/Sunflower_v2.mp3",
-  "albumArtPath": "http://159.223.127.113/mediaplayer/albumart/sunflower_AlbumArt.jpg",
+  "songPath": "/mediaplayer/songs/Sunflower_v2.mp3",
+  "albumArtPath": "/mediaplayer/albumart/sunflower_AlbumArt.jpg",
   "uploadedAt": "2025-06-06T17:29:10.296Z"
 }

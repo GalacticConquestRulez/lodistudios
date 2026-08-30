@@ -1,22 +1,12 @@
 [
   {
-    "songname": "Boy",
-    "artist": "Luna Brava",
-    "album": "Boy - Single",
-    "artistDisplay": "Luna Brava",
-    "albumDisplay": "Boy - Single",
-    "songPath": "http://159.223.127.113/mediaplayer/songs/Boy.mp3",
-    "albumArtPath": "http://159.223.127.113/mediaplayer/albumart/boy_AlbumArt.jpg",
-    "uploadedAt": "2025-06-09T07:00:02.067Z"
-  },
-  {
     "songname": "Calling Your Name",
     "artist": "Lodi",
     "album": "Calling your name - Single",
     "artistDisplay": "Lodi",
     "albumDisplay": "Calling your name - Single",
-    "songPath": "http://159.223.127.113/mediaplayer/songs/Calling_your_name.mp3",
-    "albumArtPath": "http://159.223.127.113/mediaplayer/albumart/calling_your_name_AlbumArt.jpg",
+    "songPath": "/mediaplayer/songs/Calling_your_name.mp3",
+    "albumArtPath": "/mediaplayer/albumart/calling_your_name_AlbumArt.jpg",
     "uploadedAt": "2025-07-14T13:10:49.903Z"
   },
   {
@@ -25,19 +15,9 @@
     "album": "Dear Mirror Part 2 - Single",
     "artistDisplay": "Lodi",
     "albumDisplay": "Dear Mirror Part 2 - Single",
-    "songPath": "http://159.223.127.113/mediaplayer/songs/Dear_Mirror_Part_2.mp3",
-    "albumArtPath": "http://159.223.127.113/mediaplayer/albumart/dear_mirror_part_2_AlbumArt.jpg",
+    "songPath": "/mediaplayer/songs/Dear_Mirror_Part_2.mp3",
+    "albumArtPath": "/mediaplayer/albumart/dear_mirror_part_2_AlbumArt.jpg",
     "uploadedAt": "2025-07-01T21:05:30.574Z"
-  },
-  {
-    "songname": "Deface Me",
-    "artist": "Luna Brava",
-    "album": "Deface Me - Single",
-    "artistDisplay": "Luna Brava",
-    "albumDisplay": "Deface Me - Single",
-    "songPath": "http://159.223.127.113/mediaplayer/songs/Deface_Me.mp3",
-    "albumArtPath": "http://159.223.127.113/mediaplayer/albumart/deface_me_AlbumArt.jpg",
-    "uploadedAt": "2025-06-12T19:14:34.730Z"
   },
   {
     "songname": "Monopoly Tears",
@@ -45,19 +25,9 @@
     "album": "Rearview Skies",
     "artistDisplay": "Lodi",
     "albumDisplay": "Rearview Skies",
-    "songPath": "http://159.223.127.113/mediaplayer/songs/Monopoly_Tears_Audio.mp3",
-    "albumArtPath": "http://159.223.127.113/mediaplayer/albumart/monopoly_tears_AlbumArt.jpg",
+    "songPath": "/mediaplayer/songs/Monopoly_Tears_Audio.mp3",
+    "albumArtPath": "/mediaplayer/albumart/monopoly_tears_AlbumArt.jpg",
     "uploadedAt": "2025-06-06T17:29:40.871Z"
-  },
-  {
-    "songname": "Petty Zodiac",
-    "artist": "Luna Brava",
-    "album": "Petty Zodiac",
-    "artistDisplay": "Luna Brava",
-    "albumDisplay": "Petty Zodiac",
-    "songPath": "http://159.223.127.113/mediaplayer/songs/Petty_Zodiac.mp3",
-    "albumArtPath": "http://159.223.127.113/mediaplayer/albumart/petty_zodiac_AlbumArt.jpg",
-    "uploadedAt": "2025-06-08T09:20:04.323Z"
   },
   {
     "songname": "Rearview Skies",
@@ -65,19 +35,9 @@
     "album": "Rearview Skies",
     "artistDisplay": "Lodi",
     "albumDisplay": "Rearview Skies",
-    "songPath": "http://159.223.127.113/mediaplayer/songs/Rearview_Skies_Audio.mp3",
-    "albumArtPath": "http://159.223.127.113/mediaplayer/albumart/rearview_skies_AlbumArt.jpg",
+    "songPath": "/mediaplayer/songs/Rearview_Skies_Audio.mp3",
+    "albumArtPath": "/mediaplayer/albumart/rearview_skies_AlbumArt.jpg",
     "uploadedAt": "2025-06-06T17:28:51.567Z"
-  },
-  {
-    "songname": "Starving",
-    "artist": "Luna Brava",
-    "album": "Starving - Single",
-    "artistDisplay": "Luna Brava",
-    "albumDisplay": "Starving - Single",
-    "songPath": "http://159.223.127.113/mediaplayer/songs/Starving_v1.mp3",
-    "albumArtPath": "http://159.223.127.113/mediaplayer/albumart/starving_AlbumArt.jpg",
-    "uploadedAt": "2025-06-12T13:31:45.148Z"
   },
   {
     "songname": "Success",
@@ -85,8 +45,8 @@
     "album": "Success - Single",
     "artistDisplay": "Lodi",
     "albumDisplay": "Success - Single",
-    "songPath": "http://159.223.127.113/mediaplayer/songs/Success.mp3",
-    "albumArtPath": "http://159.223.127.113/mediaplayer/albumart/success_AlbumArt.jpg",
+    "songPath": "/mediaplayer/songs/Success.mp3",
+    "albumArtPath": "/mediaplayer/albumart/success_AlbumArt.jpg",
     "uploadedAt": "2025-07-08T03:56:49.880Z"
   },
   {
@@ -95,8 +55,8 @@
     "album": "Rearview Skies",
     "artistDisplay": "Lodi",
     "albumDisplay": "Rearview Skies",
-    "songPath": "http://159.223.127.113/mediaplayer/songs/Sunflower_v2.mp3",
-    "albumArtPath": "http://159.223.127.113/mediaplayer/albumart/sunflower_AlbumArt.jpg",
+    "songPath": "/mediaplayer/songs/Sunflower_v2.mp3",
+    "albumArtPath": "/mediaplayer/albumart/sunflower_AlbumArt.jpg",
     "uploadedAt": "2025-06-06T17:29:10.296Z"
   },
   {
@@ -105,8 +65,48 @@
     "album": "Rearview Skies",
     "artistDisplay": "Lodi",
     "albumDisplay": "Rearview Skies",
-    "songPath": "http://159.223.127.113/mediaplayer/songs/Truth_Audio.mp3",
-    "albumArtPath": "http://159.223.127.113/mediaplayer/albumart/truth_AlbumArt.jpg",
+    "songPath": "/mediaplayer/songs/Truth_Audio.mp3",
+    "albumArtPath": "/mediaplayer/albumart/truth_AlbumArt.jpg",
     "uploadedAt": "2025-06-06T17:28:27.188Z"
+  },
+  {
+    "songname": "Boy",
+    "artist": "Luna Brava",
+    "album": "Boy - Single",
+    "artistDisplay": "Luna Brava",
+    "albumDisplay": "Boy - Single",
+    "songPath": "/mediaplayer/songs/Boy.mp3",
+    "albumArtPath": "/mediaplayer/albumart/boy_AlbumArt.jpg",
+    "uploadedAt": "2025-06-09T07:00:02.067Z"
+  },
+  {
+    "songname": "Deface Me",
+    "artist": "Luna Brava",
+    "album": "Deface Me - Single",
+    "artistDisplay": "Luna Brava",
+    "albumDisplay": "Deface Me - Single",
+    "songPath": "/mediaplayer/songs/Deface_Me.mp3",
+    "albumArtPath": "/mediaplayer/albumart/deface_me_AlbumArt.jpg",
+    "uploadedAt": "2025-06-12T19:14:34.730Z"
+  },
+  {
+    "songname": "Petty Zodiac",
+    "artist": "Luna Brava",
+    "album": "Petty Zodiac",
+    "artistDisplay": "Luna Brava",
+    "albumDisplay": "Petty Zodiac",
+    "songPath": "/mediaplayer/songs/Petty_Zodiac.mp3",
+    "albumArtPath": "/mediaplayer/albumart/petty_zodiac_AlbumArt.jpg",
+    "uploadedAt": "2025-06-08T09:20:04.323Z"
+  },
+  {
+    "songname": "Starving",
+    "artist": "Luna Brava",
+    "album": "Starving - Single",
+    "artistDisplay": "Luna Brava",
+    "albumDisplay": "Starving - Single",
+    "songPath": "/mediaplayer/songs/Starving_v1.mp3",
+    "albumArtPath": "/mediaplayer/albumart/starving_AlbumArt.jpg",
+    "uploadedAt": "2025-06-12T13:31:45.148Z"
   }
 ]

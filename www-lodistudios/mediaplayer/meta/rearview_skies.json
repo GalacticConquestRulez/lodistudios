@@ -4,7 +4,7 @@
   "album": "Rearview Skies",
   "artistDisplay": "Lodi",
   "albumDisplay": "Rearview Skies",
-  "songPath": "http://159.223.127.113/mediaplayer/songs/Rearview_Skies_Audio.mp3",
-  "albumArtPath": "http://159.223.127.113/mediaplayer/albumart/rearview_skies_AlbumArt.jpg",
+  "songPath": "/mediaplayer/songs/Rearview_Skies_Audio.mp3",
+  "albumArtPath": "/mediaplayer/albumart/rearview_skies_AlbumArt.jpg",
   "uploadedAt": "2025-06-06T17:28:51.567Z"
 }

@@ -2,124 +2,149 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>LodiStudios | Home</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LodiStudios | AI Music, Animation & Aerial</title>
+  <meta name="description" content="LodiStudios — AI music, AI animation, aerial and aquatic cinematography." />
+  <link rel="icon" href="/mediaplayer/favicon-32x32.png" sizes="32x32" type="image/png" />
+  <link rel="apple-touch-icon" href="/mediaplayer/apple-touch-icon.png" sizes="180x180" />
+  <meta name="theme-color" content="#08080c" />
   <style>
     :root {
-      --primary-color: #ff4fad;
-      --bg-color: #0f0f0f;
-      --text-color: #ffffff;
+      --bg: #08080c;
+      --text: #f4f4f6;
+      --text-dim: rgba(244, 244, 246, 0.62);
+      --text-faint: rgba(244, 244, 246, 0.38);
+      --border: rgba(255, 255, 255, 0.09);
+      --elev: rgba(255, 255, 255, 0.035);
+      --elev-hi: rgba(255, 255, 255, 0.07);
+      --accent: #ff4fa0;
+      --accent-2: #a855f7;
+      --grad: linear-gradient(135deg, #ff4fa0 0%, #a855f7 100%);
+      --ease: cubic-bezier(0.4, 0, 0.2, 1);
+      color-scheme: dark;
     }
-
+    * { box-sizing: border-box; }
     body {
       margin: 0;
-      background-color: var(--bg-color);
-      color: var(--text-color);
-      font-family: 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      font-size: 16px;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+    .wash {
+      position: fixed; inset: -20%; z-index: -1; pointer-events: none;
+      background:
+        radial-gradient(55% 55% at 18% 8%, rgba(255, 79, 160, 0.26), transparent 68%),
+        radial-gradient(50% 50% at 82% 22%, rgba(168, 85, 247, 0.22), transparent 68%);
+      filter: blur(70px) saturate(1.3);
+    }
+    .wash::after {
+      content: ""; position: absolute; inset: 0;
+      background: linear-gradient(180deg, transparent 0%, var(--bg) 88%);
     }
 
     header {
-      background-color: #1a1a1a;
-      padding: 1rem 2rem;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
+      position: sticky; top: 0; z-index: 20;
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 20px; flex-wrap: wrap;
+      padding: 16px clamp(16px, 5vw, 48px);
+      background: rgba(8, 8, 12, 0.72);
+      backdrop-filter: blur(20px) saturate(1.4);
+      -webkit-backdrop-filter: blur(20px) saturate(1.4);
+      border-bottom: 1px solid var(--border);
     }
-
-    .logo {
-      font-size: 1.8rem;
-      font-weight: bold;
-      color: var(--primary-color);
-      text-transform: uppercase;
-      letter-spacing: 1px;
-    }
-
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 1.1rem; letter-spacing: -0.01em; }
+    .brand span { width: 26px; height: 26px; border-radius: 8px; background: var(--grad); box-shadow: 0 0 18px rgba(255, 79, 160, 0.45); }
+    .brand b { font-weight: 700; }
+    .brand em { font-style: normal; color: var(--accent); }
+    nav { display: flex; gap: 4px; flex-wrap: wrap; }
     nav a {
-      color: var(--text-color);
-      margin-left: 2rem;
-      text-decoration: none;
-      font-size: 1rem;
-      transition: color 0.3s ease;
+      color: var(--text-dim); text-decoration: none;
+      padding: 7px 13px; border-radius: 999px; font-size: 0.9rem; font-weight: 500;
+      transition: color 0.2s var(--ease), background 0.2s var(--ease);
     }
+    nav a:hover { color: var(--text); background: var(--elev-hi); }
 
-    nav a:hover {
-      color: var(--primary-color);
+    main { max-width: 1120px; margin: 0 auto; padding: 0 clamp(16px, 5vw, 48px); }
+
+    .hero { padding: clamp(56px, 11vw, 120px) 0 clamp(40px, 7vw, 72px); max-width: 780px; }
+    .eyebrow {
+      display: inline-block; margin-bottom: 18px; padding: 6px 14px;
+      border: 1px solid var(--border); border-radius: 999px;
+      background: var(--elev);
+      font-size: 0.76rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--accent);
     }
-
-    .hero {
-      padding: 5rem 2rem;
-      text-align: center;
-    }
-
     .hero h1 {
-      font-size: 3rem;
-      margin-bottom: 1rem;
+      margin: 0 0 20px;
+      font-size: clamp(2.3rem, 7vw, 4.4rem);
+      line-height: 1.03; font-weight: 800; letter-spacing: -0.035em;
     }
-
-    .hero p {
-      font-size: 1.2rem;
-      max-width: 700px;
-      margin: 0 auto;
-      opacity: 0.85;
+    .hero h1 b { font-weight: 800; background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .hero p { margin: 0 0 32px; font-size: clamp(1rem, 2vw, 1.18rem); color: var(--text-dim); max-width: 620px; }
+    .cta { display: flex; gap: 12px; flex-wrap: wrap; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 9px;
+      padding: 13px 28px; border-radius: 999px;
+      font-weight: 600; font-size: 0.97rem; text-decoration: none;
+      border: 1px solid transparent;
+      transition: transform 0.15s var(--ease), box-shadow 0.2s var(--ease), background 0.2s var(--ease);
     }
+    .btn-primary { background: var(--grad); color: #fff; box-shadow: 0 6px 22px rgba(255, 79, 160, 0.36); }
+    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(255, 79, 160, 0.48); }
+    .btn-ghost { background: var(--elev); border-color: rgba(255,255,255,0.16); color: var(--text); }
+    .btn-ghost:hover { background: var(--elev-hi); transform: translateY(-2px); }
+    .btn svg { width: 17px; height: 17px; fill: currentColor; }
 
-    .sections {
-      margin-top: 3rem;
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: center;
-      gap: 2rem;
-      padding-bottom: 4rem;
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(238px, 1fr));
+      gap: 18px;
+      padding-bottom: 88px;
     }
-
-    .section-card {
-      background: #1c1c1c;
-      border: 1px solid #333;
-      padding: 2rem;
-      border-radius: 8px;
-      width: 260px;
-      text-align: center;
-      transition: transform 0.2s ease;
-    }
-
-    .section-card:hover {
-      transform: translateY(-5px);
-      border-color: var(--primary-color);
-    }
-
-    .section-card a {
-      color: var(--primary-color);
-      text-decoration: none;
+    .card {
+      position: relative;
       display: block;
-      margin-top: 0.5rem;
+      padding: 26px 24px 24px;
+      background: var(--elev);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      text-decoration: none; color: var(--text);
+      overflow: hidden;
+      transition: transform 0.22s var(--ease), border-color 0.22s var(--ease), background 0.22s var(--ease);
     }
+    .card::before {
+      content: ""; position: absolute; inset: 0 0 auto; height: 2px;
+      background: var(--grad); opacity: 0; transition: opacity 0.22s var(--ease);
+    }
+    .card:hover { transform: translateY(-4px); border-color: rgba(255,255,255,0.18); background: var(--elev-hi); }
+    .card:hover::before { opacity: 1; }
+    .card .ico { font-size: 1.7rem; display: block; margin-bottom: 12px; }
+    .card h3 { margin: 0 0 6px; font-size: 1.05rem; font-weight: 700; letter-spacing: -0.01em; }
+    .card p { margin: 0; font-size: 0.9rem; color: var(--text-dim); line-height: 1.5; }
+    .card .go { display: block; margin-top: 14px; font-size: 0.86rem; font-weight: 600; color: var(--accent); }
 
     footer {
-      text-align: center;
-      padding: 2rem;
-      font-size: 0.9rem;
-      color: #888;
-      border-top: 1px solid #222;
+      border-top: 1px solid var(--border);
+      padding: 32px clamp(16px, 5vw, 48px);
+      text-align: center; color: var(--text-faint); font-size: 0.88rem;
     }
-
-    @media (max-width: 768px) {
-      .hero h1 {
-        font-size: 2rem;
-      }
-
-      nav {
-        display: none; /* Simplified for now, can add mobile menu later */
-      }
+    @media (prefers-reduced-motion: reduce) {
+      * { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
     }
   </style>
 </head>
 <body>
+  <div class="wash" aria-hidden="true"></div>
 
   <header>
-    <div class="logo">LodiStudios</div>
+    <div class="brand"><span aria-hidden="true"></span><b>Lodi<em>Studios</em></b></div>
     <nav>
       <a href="/">Home</a>
-      <a href="/mediaplayer">AI Music</a>
+      <a href="/mediaplayer/">AI Music</a>
       <a href="/ai-animation">AI Animation</a>
       <a href="/aerial">Aerial</a>
       <a href="/aquatic">Aquatic</a>
@@ -129,45 +154,66 @@
     </nav>
   </header>
 
-  <section class="hero">
-    <h1>Crafting the Future of Creativity</h1>
-    <p>From AI music and animation to aerial shots and cinematic editing, LodiStudios is your all-in-one creative force.</p>
-  </section>
+  <main>
+    <section class="hero">
+      <span class="eyebrow">LodiStudios</span>
+      <h1>Crafting the future of <b>creativity</b></h1>
+      <p>From AI music and animation to aerial cinematography and underwater work — an all-in-one creative studio.</p>
+      <div class="cta">
+        <a class="btn btn-primary" href="/mediaplayer/">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l12-7.5z"/></svg>
+          Listen now
+        </a>
+        <a class="btn btn-ghost" href="/about">About the studio</a>
+      </div>
+    </section>
 
-  <section class="sections">
-    <div class="section-card">
-      <strong>🎶 AI Music</strong>
-      <a href="/mediaplayer">Explore ➝</a>
-    </div>
-    <div class="section-card">
-      <strong>🎨 AI Animation</strong>
-      <a href="/ai-animation">View ➝</a>
-    </div>
-    <div class="section-card">
-      <strong>🚁 Aerial Footage</strong>
-      <a href="/aerial">See More ➝</a>
-    </div>
-    <div class="section-card">
-      <strong>🌊 Aquatic</strong>
-      <a href="/aquatic">Dive In ➝</a>
-    </div>
-    <div class="section-card">
-      <strong>🛠 Services</strong>
-      <a href="/services">Browse ➝</a>
-    </div>
-    <div class="section-card">
-      <strong>🛒 Shop</strong>
-      <a href="/shop">Enter ➝</a>
-    </div>
-    <div class="section-card">
-      <strong>👤 About Us</strong>
-      <a href="/about">Meet Us ➝</a>
-    </div>
-  </section>
+    <section class="grid">
+      <a class="card" href="/mediaplayer/">
+        <span class="ico" aria-hidden="true">🎶</span>
+        <h3>AI Music</h3>
+        <p>Original AI-composed tracks, streaming in the browser.</p>
+        <span class="go">Explore →</span>
+      </a>
+      <a class="card" href="/ai-animation">
+        <span class="ico" aria-hidden="true">🎨</span>
+        <h3>AI Animation</h3>
+        <p>Generated motion pieces and visual experiments.</p>
+        <span class="go">View →</span>
+      </a>
+      <a class="card" href="/aerial">
+        <span class="ico" aria-hidden="true">🚁</span>
+        <h3>Aerial Footage</h3>
+        <p>Drone cinematography, shot and graded in-house.</p>
+        <span class="go">See more →</span>
+      </a>
+      <a class="card" href="/aquatic">
+        <span class="ico" aria-hidden="true">🌊</span>
+        <h3>Aquatic</h3>
+        <p>Underwater and waterline camera work.</p>
+        <span class="go">Dive in →</span>
+      </a>
+      <a class="card" href="/services">
+        <span class="ico" aria-hidden="true">🛠</span>
+        <h3>Services</h3>
+        <p>Editing, colour, sound and full production.</p>
+        <span class="go">Browse →</span>
+      </a>
+      <a class="card" href="/shop">
+        <span class="ico" aria-hidden="true">🛒</span>
+        <h3>Shop</h3>
+        <p>Prints, licences and downloads.</p>
+        <span class="go">Enter →</span>
+      </a>
+      <a class="card" href="/about">
+        <span class="ico" aria-hidden="true">👤</span>
+        <h3>About Us</h3>
+        <p>Who is behind LodiStudios.</p>
+        <span class="go">Meet us →</span>
+      </a>
+    </section>
+  </main>
 
-  <footer>
-    © 2025 LodiStudios. All rights reserved.
-  </footer>
-
+  <footer>© 2025 LodiStudios. All rights reserved.</footer>
 </body>
 </html>

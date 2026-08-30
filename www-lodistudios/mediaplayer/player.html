@@ -2,30 +2,129 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>LodiStudios | AI Music</title>
-  <link rel="stylesheet" href="player.css" />
+  <meta name="description" content="AI music by LodiStudios — stream the full catalogue." />
+
+  <link rel="stylesheet" href="/mediaplayer/player.css" />
   <link rel="icon" href="/mediaplayer/favicon-32x32.png" sizes="32x32" type="image/png" />
   <link rel="icon" href="/mediaplayer/favicon-16x16.png" sizes="16x16" type="image/png" />
   <link rel="apple-touch-icon" href="/mediaplayer/apple-touch-icon.png" sizes="180x180" />
-  <meta name="theme-color" content="#ff66cc" />
   <link rel="manifest" href="/mediaplayer/manifest.json" />
+  <meta name="theme-color" content="#0a0a0f" />
 
-  <!-- iOS / PWA Enhancements -->
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="LodiStudios" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 </head>
 
 <body>
-  <header>LodiStudios | AI Music</header>
-  <div id="songContainer" class="container"></div>
+  <!-- Ambient colour wash driven by the current album art -->
+  <div class="ambient" id="ambient" aria-hidden="true"></div>
 
-  <script src="player.js" defer></script>
-  <script>
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/mediaplayer/serviceWorker.js').catch(console.error);
-    }
-  </script>
+  <header class="topbar">
+    <a class="brand" href="/">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <span class="brand-text">Lodi<em>Studios</em></span>
+    </a>
+
+    <div class="search-wrap">
+      <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+      <input id="search" type="search" placeholder="Search songs, artists, albums" aria-label="Search the catalogue" autocomplete="off" />
+    </div>
+
+    <nav class="filters" id="filters" aria-label="Filter by artist"></nav>
+  </header>
+
+  <main>
+    <!-- Now playing showcase -->
+    <section class="hero" id="hero" aria-live="polite">
+      <div class="hero-art-wrap">
+        <img id="heroArt" class="hero-art" alt="" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'/%3E" />
+        <div class="hero-art-glow" aria-hidden="true"></div>
+      </div>
+      <div class="hero-info">
+        <p class="hero-eyebrow" id="heroEyebrow">Select a track</p>
+        <h1 class="hero-title" id="heroTitle">LodiStudios</h1>
+        <p class="hero-meta" id="heroMeta">AI Music</p>
+        <div class="hero-actions">
+          <button class="btn-primary" id="heroPlay" type="button">
+            <svg class="i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l12-7.5z"/></svg>
+            <span id="heroPlayLabel">Play all</span>
+          </button>
+          <button class="btn-ghost" id="heroShuffle" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg>
+            Shuffle
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <section class="list-section">
+      <div class="list-head">
+        <h2 id="listHeading">All tracks</h2>
+        <span class="count" id="listCount"></span>
+      </div>
+      <ol class="tracklist" id="tracklist"></ol>
+      <p class="empty" id="empty" hidden>No tracks match that search.</p>
+    </section>
+  </main>
+
+  <!-- Fixed transport bar -->
+  <footer class="playbar" id="playbar" hidden>
+    <div class="pb-track">
+      <img id="pbArt" class="pb-art" alt="" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'/%3E" />
+      <div class="pb-text">
+        <span class="pb-title" id="pbTitle"></span>
+        <span class="pb-artist" id="pbArtist"></span>
+      </div>
+    </div>
+
+    <div class="pb-center">
+      <div class="pb-buttons">
+        <button class="icon-btn" id="btnShuffle" type="button" title="Shuffle (S)" aria-pressed="false" aria-label="Shuffle">
+          <svg viewBox="0 0 24 24"><path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg>
+        </button>
+        <button class="icon-btn" id="btnPrev" type="button" title="Previous (←)" aria-label="Previous track">
+          <svg viewBox="0 0 24 24"><path d="M18 5v14L8 12zM6 5v14" /></svg>
+        </button>
+        <button class="play-btn" id="btnPlay" type="button" title="Play/Pause (Space)" aria-label="Play">
+          <svg class="i-play" viewBox="0 0 24 24"><path d="M7 4.5v15l12-7.5z"/></svg>
+          <svg class="i-pause" viewBox="0 0 24 24"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"/></svg>
+        </button>
+        <button class="icon-btn" id="btnNext" type="button" title="Next (→)" aria-label="Next track">
+          <svg viewBox="0 0 24 24"><path d="M6 5v14l10-7zM18 5v14" /></svg>
+        </button>
+        <button class="icon-btn" id="btnRepeat" type="button" title="Repeat (R)" aria-pressed="false" aria-label="Repeat">
+          <svg viewBox="0 0 24 24"><path d="M17 2l4 4-4 4M3 11V9a4 4 0 014-4h14M7 22l-4-4 4-4M21 13v2a4 4 0 01-4 4H3"/></svg>
+          <span class="repeat-one" id="repeatOne" hidden>1</span>
+        </button>
+      </div>
+
+      <div class="pb-seek">
+        <span class="time" id="timeNow">0:00</span>
+        <div class="seek" id="seek" role="slider" tabindex="0"
+             aria-label="Seek" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+          <div class="seek-track"><div class="seek-buffer" id="seekBuffer"></div><div class="seek-fill" id="seekFill"><span class="seek-knob"></span></div></div>
+        </div>
+        <span class="time" id="timeTotal">0:00</span>
+      </div>
+    </div>
+
+    <div class="pb-right">
+      <button class="icon-btn" id="btnMute" type="button" title="Mute (M)" aria-label="Mute">
+        <svg class="i-vol" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9zM16.5 8.5a5 5 0 010 7M19 6a9 9 0 010 12"/></svg>
+        <svg class="i-muted" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9zM17 9l4 6M21 9l-4 6"/></svg>
+      </button>
+      <div class="vol" id="vol" role="slider" tabindex="0"
+           aria-label="Volume" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100">
+        <div class="vol-track"><div class="vol-fill" id="volFill"><span class="vol-knob"></span></div></div>
+      </div>
+    </div>
+  </footer>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+  <script src="/mediaplayer/player.js" defer></script>
 </body>
 </html>

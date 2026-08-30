@@ -1,0 +1,23 @@
+[Unit]
+Description=LodiStudios upload service
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/var/www/lodistudios/upload
+ExecStart=/usr/bin/node /var/www/lodistudios/upload/server.js
+Restart=on-failure
+RestartSec=5
+
+# Bind to loopback only; nginx is the sole way in, and it asks for a password.
+Environment=UPLOAD_HOST=127.0.0.1
+Environment=UPLOAD_PORT=3000
+
+# Least privilege: the service can only write to the media directories.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ReadWritePaths=/var/www/lodistudios/mediaplayer /var/www/lodistudios/upload
+
+[Install]
+WantedBy=multi-user.target
