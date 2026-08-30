@@ -83,16 +83,27 @@ if [ -d "$WEB_ROOT/upload" ]; then
         warn "npm not found — install Node.js, then run: cd $WEB_ROOT/upload && npm install"
     fi
 
-    install -m 644 "$HERE/lodistudios-uploader.service" /etc/systemd/system/lodistudios-uploader.service
-    systemctl daemon-reload
-    systemctl enable --now lodistudios-uploader >/dev/null 2>&1 || true
-    systemctl restart lodistudios-uploader
-
-    sleep 1
-    if systemctl is-active --quiet lodistudios-uploader; then
-        ok "uploader running on 127.0.0.1:3000 (not reachable from the internet)"
+    # node is at /usr/bin/node from apt, /usr/local/bin/node from NodeSource,
+    # and somewhere under ~/.nvm with nvm. Bake in whichever this box has.
+    NODE_BIN="$(command -v node || true)"
+    if [ -z "$NODE_BIN" ]; then
+        warn "node not found — skipping the service. Install Node.js, then re-run this script."
     else
-        warn "uploader did not start. Check:  journalctl -u lodistudios-uploader -n 40"
+        ok "using node at $NODE_BIN"
+        sed "s#^ExecStart=.*#ExecStart=$NODE_BIN /var/www/lodistudios/upload/server.js#" \
+            "$HERE/lodistudios-uploader.service" > /etc/systemd/system/lodistudios-uploader.service
+        chmod 644 /etc/systemd/system/lodistudios-uploader.service
+        systemctl daemon-reload
+        systemctl enable --now lodistudios-uploader >/dev/null 2>&1 || true
+        systemctl restart lodistudios-uploader
+
+        sleep 1
+        if systemctl is-active --quiet lodistudios-uploader; then
+            ok "uploader running on 127.0.0.1:3000 (not reachable from the internet)"
+            ok "it will now start automatically on every boot"
+        else
+            warn "uploader did not start. Check:  journalctl -u lodistudios-uploader -n 40"
+        fi
     fi
 fi
 
