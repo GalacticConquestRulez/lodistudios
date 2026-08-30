@@ -191,6 +191,9 @@ app.post('/upload', (req, res) => {
   });
 });
 
+// nginx serves the form; this only fires if something reaches Node directly.
+app.get('/upload', (req, res) => res.redirect('/upload/'));
+
 app.get('/healthz', (req, res) => res.send('ok'));
 
 app.listen(PORT, HOST, () => console.log(`Uploader listening on http://${HOST}:${PORT}`));
