@@ -57,6 +57,11 @@ const el = {
 
 const audio = new Audio();
 audio.preload = 'metadata';
+// iOS (lock screen, CarPlay) registers the Now Playing session from an
+// element that is in the document; a detached `new Audio()` frequently
+// never shows up. It stays hidden — the UI is our own.
+audio.setAttribute('playsinline', '');
+audio.hidden = true;
 
 const state = {
   all: [],        // every track from index.json
@@ -354,6 +359,15 @@ audio.addEventListener('play', () => {
   const song = current();
   if (song) paintHero(song);
   markCurrent();
+  if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
+});
+
+// iOS can drop the metadata when the source changes, so re-assert it once
+// playback is genuinely under way.
+audio.addEventListener('playing', () => {
+  const song = current();
+  if (song) updateMediaSession(song);
+  syncPosition();
 });
 
 audio.addEventListener('pause', () => {
@@ -362,6 +376,7 @@ audio.addEventListener('pause', () => {
   const song = current();
   if (song) paintHero(song);
   markCurrent();
+  if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
 });
 
 audio.addEventListener('ended', () => next(true));
@@ -382,9 +397,13 @@ audio.addEventListener('volumechange', () => {
 
 function updateMediaSession(song) {
   if (!('mediaSession' in navigator)) return;
+
+  // The artwork is 512x512 on disk; declare its true size and give an
+  // absolute URL, which several platforms require.
   const art = song.albumArtPath
-    ? [512, 256, 192, 96].map((s) => ({ src: song.albumArtPath, sizes: `${s}x${s}`, type: 'image/jpeg' }))
+    ? [{ src: new URL(song.albumArtPath, location.href).href, sizes: '512x512', type: 'image/jpeg' }]
     : [];
+
   navigator.mediaSession.metadata = new MediaMetadata({
     title: song.songname || 'Untitled',
     artist: song.artistDisplay || song.artist || 'Unknown artist',
@@ -583,6 +602,8 @@ async function loadDurations(songs) {
 }
 
 /* ---------- boot ---------- */
+
+document.body.appendChild(audio);
 
 el.btnShuffle.setAttribute('aria-pressed', String(state.shuffle));
 el.btnRepeat.setAttribute('aria-pressed', String(state.repeat !== 'off'));
