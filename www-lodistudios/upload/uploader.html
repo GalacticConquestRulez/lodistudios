@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Media Uploader</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <div class="container">
+    <h1>🎵 Upload Media</h1>
+
+    <form action="/upload" method="POST" enctype="multipart/form-data">
+      <label for="song">MP3 File:</label>
+      <input type="file" name="song" id="song" accept=".mp3" required>
+
+      <label for="art">Album Art (JPG/PNG):</label>
+      <input type="file" name="art" id="art" accept=".jpg,.jpeg,.png" required>
+
+      <label for="artist">Artist Name:</label>
+      <input type="text" name="artist" id="artist" required>
+
+      <label for="album">Album Name:</label>
+      <input type="text" name="album" id="album" required>
+
+      <label for="artistDisplay">Display Artist (Optional):</label>
+      <input type="text" name="artistDisplay" id="artistDisplay">
+
+      <label for="albumDisplay">Display Album (Optional):</label>
+      <input type="text" name="albumDisplay" id="albumDisplay">
+
+      <label for="songname">Song Title:</label>
+      <input type="text" name="songname" id="songname" required>
+
+      <button type="submit">Upload 🚀</button>
+    </form>
+  </div>
+
+</body>
+</html>

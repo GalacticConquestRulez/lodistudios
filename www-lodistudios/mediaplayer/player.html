@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LodiStudios | AI Music</title>
+  <link rel="stylesheet" href="player.css" />
+  <link rel="icon" href="/mediaplayer/favicon-32x32.png" sizes="32x32" type="image/png" />
+  <link rel="icon" href="/mediaplayer/favicon-16x16.png" sizes="16x16" type="image/png" />
+  <link rel="apple-touch-icon" href="/mediaplayer/apple-touch-icon.png" sizes="180x180" />
+  <meta name="theme-color" content="#ff66cc" />
+  <link rel="manifest" href="/mediaplayer/manifest.json" />
+
+  <!-- iOS / PWA Enhancements -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="LodiStudios" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+</head>
+
+<body>
+  <header>LodiStudios | AI Music</header>
+  <div id="songContainer" class="container"></div>
+
+  <script src="player.js" defer></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/mediaplayer/serviceWorker.js').catch(console.error);
+    }
+  </script>
+</body>
+</html>

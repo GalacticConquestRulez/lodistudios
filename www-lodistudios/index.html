@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>LodiStudios | Home</title>
+  <style>
+    :root {
+      --primary-color: #ff4fad;
+      --bg-color: #0f0f0f;
+      --text-color: #ffffff;
+    }
+
+    body {
+      margin: 0;
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      font-family: 'Segoe UI', sans-serif;
+    }
+
+    header {
+      background-color: #1a1a1a;
+      padding: 1rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .logo {
+      font-size: 1.8rem;
+      font-weight: bold;
+      color: var(--primary-color);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    nav a {
+      color: var(--text-color);
+      margin-left: 2rem;
+      text-decoration: none;
+      font-size: 1rem;
+      transition: color 0.3s ease;
+    }
+
+    nav a:hover {
+      color: var(--primary-color);
+    }
+
+    .hero {
+      padding: 5rem 2rem;
+      text-align: center;
+    }
+
+    .hero h1 {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+    }
+
+    .hero p {
+      font-size: 1.2rem;
+      max-width: 700px;
+      margin: 0 auto;
+      opacity: 0.85;
+    }
+
+    .sections {
+      margin-top: 3rem;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 2rem;
+      padding-bottom: 4rem;
+    }
+
+    .section-card {
+      background: #1c1c1c;
+      border: 1px solid #333;
+      padding: 2rem;
+      border-radius: 8px;
+      width: 260px;
+      text-align: center;
+      transition: transform 0.2s ease;
+    }
+
+    .section-card:hover {
+      transform: translateY(-5px);
+      border-color: var(--primary-color);
+    }
+
+    .section-card a {
+      color: var(--primary-color);
+      text-decoration: none;
+      display: block;
+      margin-top: 0.5rem;
+    }
+
+    footer {
+      text-align: center;
+      padding: 2rem;
+      font-size: 0.9rem;
+      color: #888;
+      border-top: 1px solid #222;
+    }
+
+    @media (max-width: 768px) {
+      .hero h1 {
+        font-size: 2rem;
+      }
+
+      nav {
+        display: none; /* Simplified for now, can add mobile menu later */
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="logo">LodiStudios</div>
+    <nav>
+      <a href="/">Home</a>
+      <a href="/mediaplayer">AI Music</a>
+      <a href="/ai-animation">AI Animation</a>
+      <a href="/aerial">Aerial</a>
+      <a href="/aquatic">Aquatic</a>
+      <a href="/services">Services</a>
+      <a href="/shop">Shop</a>
+      <a href="/about">About</a>
+    </nav>
+  </header>
+
+  <section class="hero">
+    <h1>Crafting the Future of Creativity</h1>
+    <p>From AI music and animation to aerial shots and cinematic editing, LodiStudios is your all-in-one creative force.</p>
+  </section>
+
+  <section class="sections">
+    <div class="section-card">
+      <strong>🎶 AI Music</strong>
+      <a href="/mediaplayer">Explore ➝</a>
+    </div>
+    <div class="section-card">
+      <strong>🎨 AI Animation</strong>
+      <a href="/ai-animation">View ➝</a>
+    </div>
+    <div class="section-card">
+      <strong>🚁 Aerial Footage</strong>
+      <a href="/aerial">See More ➝</a>
+    </div>
+    <div class="section-card">
+      <strong>🌊 Aquatic</strong>
+      <a href="/aquatic">Dive In ➝</a>
+    </div>
+    <div class="section-card">
+      <strong>🛠 Services</strong>
+      <a href="/services">Browse ➝</a>
+    </div>
+    <div class="section-card">
+      <strong>🛒 Shop</strong>
+      <a href="/shop">Enter ➝</a>
+    </div>
+    <div class="section-card">
+      <strong>👤 About Us</strong>
+      <a href="/about">Meet Us ➝</a>
+    </div>
+  </section>
+
+  <footer>
+    © 2025 LodiStudios. All rights reserved.
+  </footer>
+
+</body>
+</html>
