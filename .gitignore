@@ -1,0 +1,36 @@
+# Dependencies / build output — bulky, reinstallable, not worth versioning
+node_modules/
+vendor/
+__pycache__/
+*.pyc
+.cache/
+dist/
+build/
+
+# Runtime noise
+*.log
+logs/
+storage/framework/
+storage/logs/
+tmp/
+*.pid
+
+# Local machine cruft
+.DS_Store
+Thumbs.db
+
+# Credentials — kept out by default; drop lines if a file is meant to ship
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+id_rsa*
+
+# Database dumps (often large, often contain user data)
+*.sqlite
+*.sqlite3
+*.sql
+*.dump
