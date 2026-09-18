@@ -1,6 +1,6 @@
 # LodiStudios — standing rules for every session in this repo
 
-Read `docs/plan.md`, `docs/ui-review.md`, `docs/webpro-markup.md`, `docs/visualize-and-library.md` and `docs/requests.md` before designing or building
+Read `docs/plan.md`, `docs/ui-review.md`, `docs/webpro-markup.md`, `docs/visualize-and-library.md`, `docs/glossary.md` and `docs/requests.md` before designing or building
 anything. They are the spec; a decision recorded there is not reopened without the owner.
 
 ## What this is
