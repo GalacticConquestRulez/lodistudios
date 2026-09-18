@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		43AC8FA4305CE784004D2A93 /* LodiKit in Frameworks */ = {isa = PBXBuildFile; productRef = 43AC8FA3305CE784004D2A93 /* LodiKit */; };
+		43AC8FCB305D0966004D2A93 /* SwiftTerm in Frameworks */ = {isa = PBXBuildFile; productRef = 43AC8FCA305D0966004D2A93 /* SwiftTerm */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -27,6 +28,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				43AC8FCB305D0966004D2A93 /* SwiftTerm in Frameworks */,
 				43AC8FA4305CE784004D2A93 /* LodiKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -71,6 +73,7 @@
 			name = LodiStudios;
 			packageProductDependencies = (
 				43AC8FA3305CE784004D2A93 /* LodiKit */,
+				43AC8FCA305D0966004D2A93 /* SwiftTerm */,
 			);
 			productName = LodiStudios;
 			productReference = 43AC8F90305CE5C6004D2A93 /* LodiStudios.app */;
@@ -102,6 +105,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				43AC8FA2305CE784004D2A93 /* XCLocalSwiftPackageReference "../../LodiKit" */,
+				43AC8FC9305D0966004D2A93 /* XCRemoteSwiftPackageReference "SwiftTerm" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 43AC8F91305CE5C6004D2A93 /* Products */;
@@ -384,10 +388,26 @@
 		};
 /* End XCLocalSwiftPackageReference section */
 
+/* Begin XCRemoteSwiftPackageReference section */
+		43AC8FC9305D0966004D2A93 /* XCRemoteSwiftPackageReference "SwiftTerm" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/migueldeicaza/SwiftTerm";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.5.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
 		43AC8FA3305CE784004D2A93 /* LodiKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = LodiKit;
+		};
+		43AC8FCA305D0966004D2A93 /* SwiftTerm */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 43AC8FC9305D0966004D2A93 /* XCRemoteSwiftPackageReference "SwiftTerm" */;
+			productName = SwiftTerm;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
