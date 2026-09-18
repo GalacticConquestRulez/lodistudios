@@ -44,3 +44,9 @@ Secure Enclave key lives in at M5, so M5 is now genuinely one attribute away. Th
 
 **Still open from M4:** tmux-restart detection (`has-session` before the attach) and the
 drop-and-return proof; `PaneInput.bytes` from M3. None of the three are in this commit.
+
+**Confirmed by use, 2026-09-18 17:47–17:51:** the rebuilt app signed in to Sessions with the
+data-protection-keychain key (`SHA256:CZNfy3+…`) with no signing prompt, and the owner then
+edited a file in nano over the session — "this worked well." That closes the keystroke-lag
+item from M3 in practice: nano is unusable at five seconds a key. **Still owed for M4:** the
+deliberate Wi-Fi drop-and-return, and tmux-restart detection.
