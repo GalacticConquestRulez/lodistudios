@@ -3,6 +3,14 @@ import Darwin
 import CryptoKit
 import CLibSSH2
 
+/// libssh2's global init, exactly once per process. Never `libssh2_exit`: tearing
+/// down global state under other live sessions (a second tab, a probe) would crash
+/// them (docs/reviews/2026-09-18-transport-m3.md).
+enum LibSSH2 {
+    private static let ready: Int32 = libssh2_init(0)
+    static func ensure() { _ = ready }
+}
+
 /// A context handed to the C sign callback through libssh2's `abstract` pointer,
 /// since a `@convention(c)` function can capture nothing.
 private final class SignContext {
@@ -132,8 +140,7 @@ public actor SSHSession {
         _ command: String, host: Host, keyStore: SSHKeyStore,
         agentSocketPath: String?, agentComment: String, forwardAgent: Bool
     ) throws -> Output {
-        _ = libssh2_init(0)
-        defer { libssh2_exit() }
+        LibSSH2.ensure()
 
         let sock = try openSocket(host: host.hostName, port: host.port)
         defer { close(sock) }

@@ -8,9 +8,9 @@ import CLibSSH2
 /// connect / host-key / agent-auth path.
 ///
 /// libssh2 is single-threaded per session, so one dedicated thread owns the
-/// channel: it polls for output and drains queued input and resizes. Input arrives
-/// from any thread through a lock; output is broadcast from the loop thread and
-/// sinks (e.g. the terminal view) hop to the main thread themselves.
+/// channel: it polls for output and drains queued input and resizes. A self-pipe
+/// sits in the same poll set so a keystroke wakes the loop immediately instead of
+/// waiting out the poll timeout (docs/reviews/2026-09-18-transport-m3.md).
 public final class SSHTerminalSession: @unchecked Sendable, PaneBackend {
     /// Fan-out of remote output. Add the terminal view as a sink before `start()`.
     public let broadcaster = PaneOutputBroadcaster()
@@ -19,6 +19,7 @@ public final class SSHTerminalSession: @unchecked Sendable, PaneBackend {
     private let host: Host
     private let keyStore: SSHKeyStore
     private let agentSocketPath: String?
+    private let tmuxSession: String
     private let initialCols: Int32
     private let initialRows: Int32
     private let onClosed: @Sendable (String?) -> Void
@@ -28,10 +29,14 @@ public final class SSHTerminalSession: @unchecked Sendable, PaneBackend {
     private var pendingSize: (Int32, Int32)?
     private var running = true
 
+    /// Self-pipe: [read, write]. Writing a byte wakes the poll in the loop.
+    private var wakePipe: [Int32] = [-1, -1]
+
     public init(
         host: Host,
         keyStore: SSHKeyStore = SSHKeyStore(),
         agentSocketPath: String? = nil,
+        tmuxSession: String? = nil,
         cols: Int32 = 80,
         rows: Int32 = 24,
         onClosed: @escaping @Sendable (String?) -> Void = { _ in }
@@ -39,10 +44,15 @@ public final class SSHTerminalSession: @unchecked Sendable, PaneBackend {
         self.host = host
         self.keyStore = keyStore
         self.agentSocketPath = agentSocketPath
+        self.tmuxSession = tmuxSession ?? "lodi-\(host.alias)"
         self.initialCols = cols
         self.initialRows = rows
         self.onClosed = onClosed
         self.pane = PaneID(host.alias)
+
+        if pipe(&wakePipe) == 0 {
+            _ = fcntl(wakePipe[0], F_SETFL, fcntl(wakePipe[0], F_GETFL, 0) | O_NONBLOCK)
+        }
     }
 
     public func start() {
@@ -54,18 +64,21 @@ public final class SSHTerminalSession: @unchecked Sendable, PaneBackend {
 
     public func stop() {
         lock.lock(); running = false; lock.unlock()
+        wake()
     }
 
-    /// Raw bytes to the remote (keystrokes). Thread-safe.
+    /// Raw bytes to the remote (keystrokes). Thread-safe; wakes the loop at once.
     public func sendBytes(_ bytes: [UInt8]) {
         lock.lock(); inputQueue.append(contentsOf: bytes); lock.unlock()
+        wake()
     }
 
     public func resize(cols: Int32, rows: Int32) {
         lock.lock(); pendingSize = (cols, rows); lock.unlock()
+        wake()
     }
 
-    // PaneBackend seam — so a PaneWriter policy can gate input later.
+    // PaneBackend seam — so a PaneWriter policy can gate input.
     public func send(_ input: PaneInput, to pane: PaneID) {
         switch input {
         case .text(let text): sendBytes(Array(text.utf8))
@@ -73,11 +86,20 @@ public final class SSHTerminalSession: @unchecked Sendable, PaneBackend {
         }
     }
 
+    private func wake() {
+        guard wakePipe[1] >= 0 else { return }
+        var byte: UInt8 = 1
+        _ = write(wakePipe[1], &byte, 1)
+    }
+
     // MARK: - The single-threaded libssh2 loop
 
     private func loop() {
-        _ = libssh2_init(0)
-        defer { libssh2_exit() }
+        LibSSH2.ensure()
+        defer {
+            if wakePipe[0] >= 0 { close(wakePipe[0]) }
+            if wakePipe[1] >= 0 { close(wakePipe[1]) }
+        }
         do {
             let sock = try SSHSession.openSocket(host: host.hostName, port: host.port)
             defer { close(sock) }
@@ -123,7 +145,7 @@ public final class SSHTerminalSession: @unchecked Sendable, PaneBackend {
             }
             guard ptyResult == 0 else { throw SSHSession.Failure.channel("pty: \(SSHSession.lastError(session))") }
 
-            let command = "tmux new -A -s lodi"
+            let command = "tmux new -A -s \(tmuxSession)"
             guard SSHSession.retry(session, sock, {
                 libssh2_channel_process_startup(channel, "exec", 4, command, UInt32(command.utf8.count))
             }) == 0 else {
@@ -153,7 +175,7 @@ public final class SSHTerminalSession: @unchecked Sendable, PaneBackend {
                 progressed = true
             }
             if !input.isEmpty {
-                writeAll(channel, input)
+                writeAll(channel, input, session: session, sock: sock)
                 progressed = true
             }
 
@@ -167,17 +189,37 @@ public final class SSHTerminalSession: @unchecked Sendable, PaneBackend {
             }
 
             if libssh2_channel_eof(channel) == 1 { break }
-            if !progressed { SSHSession.waitSocket(sock, session) }
+            if !progressed { waitForActivity(sock: sock, session: session) }
         }
     }
 
-    private func writeAll(_ channel: OpaquePointer, _ bytes: [UInt8]) {
+    /// Wait on both the ssh socket (per libssh2's block directions) and the wake
+    /// pipe, so queued input is written the instant it arrives, not after a timeout.
+    private func waitForActivity(sock: Int32, session: OpaquePointer) {
+        var fds = [
+            pollfd(fd: sock, events: 0, revents: 0),
+            pollfd(fd: wakePipe[0], events: Int16(POLLIN), revents: 0),
+        ]
+        let directions = libssh2_session_block_directions(session)
+        if directions & LIBSSH2_SESSION_BLOCK_INBOUND != 0 { fds[0].events |= Int16(POLLIN) }
+        if directions & LIBSSH2_SESSION_BLOCK_OUTBOUND != 0 { fds[0].events |= Int16(POLLOUT) }
+        if fds[0].events == 0 { fds[0].events = Int16(POLLIN) }
+
+        _ = poll(&fds, 2, 5_000)
+
+        if fds[1].revents != 0 {   // drain the wake pipe
+            var scratch = [UInt8](repeating: 0, count: 64)
+            while read(wakePipe[0], &scratch, scratch.count) > 0 {}
+        }
+    }
+
+    private func writeAll(_ channel: OpaquePointer, _ bytes: [UInt8], session: OpaquePointer, sock: Int32) {
         bytes.withUnsafeBytes { raw in
             let base = raw.bindMemory(to: UInt8.self).baseAddress!
             var sent = 0
             while sent < raw.count {
                 let n = libssh2_channel_write_ex(channel, 0, base + sent, raw.count - sent)
-                if n == LIBSSH2_ERROR_EAGAIN { continue }
+                if n == LIBSSH2_ERROR_EAGAIN { SSHSession.waitSocket(sock, session); continue }
                 if n <= 0 { break }
                 sent += Int(n)
             }

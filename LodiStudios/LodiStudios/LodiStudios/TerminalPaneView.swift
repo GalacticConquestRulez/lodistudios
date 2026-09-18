@@ -18,6 +18,9 @@ struct TerminalPaneView {
         let session: SSHTerminalSession
         weak var terminal: TerminalView?
         private var started = false
+        /// The one input door — a human's keys and an agent's send-keys alike go
+        /// through the writer's policy gate, never straight to the backend.
+        private lazy var writer = PaneWriter(backend: session)
 
         init(session: SSHTerminalSession) { self.session = session }
 
@@ -41,7 +44,7 @@ struct TerminalPaneView {
 
         // TerminalViewDelegate
         func send(source: TerminalView, data: ArraySlice<UInt8>) {
-            session.sendBytes(Array(data))
+            _ = writer.write(.text(String(decoding: data, as: UTF8.self)), to: session.pane)
         }
         func sizeChanged(source: TerminalView, newCols: Int, newRows: Int) {
             session.resize(cols: Int32(newCols), rows: Int32(newRows))
