@@ -50,3 +50,14 @@ data-protection-keychain key (`SHA256:CZNfy3+…`) with no signing prompt, and t
 edited a file in nano over the session — "this worked well." That closes the keystroke-lag
 item from M3 in practice: nano is unusable at five seconds a key. **Still owed for M4:** the
 deliberate Wi-Fi drop-and-return, and tmux-restart detection.
+
+**M4 proven by the owner, 2026-09-18:** Wi-Fi off with the terminal open, then on again —
+"same session back when back on." The reconnect loop and `tmux new -A` did their job; the
+session and its scrollback lived on the droplet throughout. **M4 closed.** One follow-up to
+confirm: whether the reconnect *banner* was visible while offline — the owner described the
+terminal as showing nothing during the outage. If the pane went blank with no banner, the
+state → banner path needs a look; the spec wants the reason shown, not silence.
+
+Remaining from M4's list, not blocking closure: tmux-restart detection, `PaneInput.bytes`.
+Next: M5 (Secure Enclave — `kSecAttrTokenIDSecureEnclave` on the same data-protection-keychain
+path) and M6 (the onward hop: `auth_agent` requested and serviced on the terminal channel).
