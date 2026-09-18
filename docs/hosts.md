@@ -42,7 +42,7 @@ Sessions into greenflash can use the private address.
 ## Device keys authorised on Sessions
 | Device | Key | Fingerprint | Added |
 |---|---|---|---|
-| Tanner's MacBook Pro (M1 Max) | ed25519, app-generated (`SSHKeyStore`) — **superseded**: the mbedTLS build cannot authenticate ed25519; replaced by a P-256 SecKey, and this line is removed from Sessions when the new key is added | `SHA256:1JUiz4wxCARiVJk8y2h5BGyl0BJ5oCfI+6pB/C6PZh4` | 2026-09-18 |
+| Tanner's MacBook Pro (M1 Max) | ECDSA P-256 `SecKey` in the Keychain, app-generated (`SSHKeyStore`); replaced the ed25519 key, which the mbedTLS build cannot use (its line was removed from Sessions) | `SHA256:lH2BtBgAl5Bgsa5CO7/vrdiisEjeU9XgSNPkJ1ZHlUg` | 2026-09-18 |
 
 The iPhone gets its own key when the iOS build first runs; never copy a key between devices.
 Note on M1's key: ed25519 is a CryptoKit key stored as Keychain data (SecKey has no ed25519),
