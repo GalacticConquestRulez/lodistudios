@@ -27,3 +27,13 @@ Sessions into greenflash can use the private address.
 - [ ] Restrict greenflash's sshd to the VPC address of Sessions plus the owner's devices.
 - [ ] Remove `greenflash-droplet` from Sessions' `authorized_keys` when the app's keys are in place.
 - [ ] Reserved IP for Sessions (free while attached) so a future rebuild keeps its address.
+
+## Device keys authorised on Sessions
+| Device | Key | Fingerprint | Added |
+|---|---|---|---|
+| Tanner's MacBook Pro (M1 Max) | ed25519, app-generated, held in the Keychain (`SSHKeyStore`) | `SHA256:1JUiz4wxCARiVJk8y2h5BGyl0BJ5oCfI+6pB/C6PZh4` | 2026-09-18 |
+
+The iPhone gets its own key when the iOS build first runs; never copy a key between devices.
+Note on M1's key: ed25519 is a CryptoKit key stored as Keychain data (SecKey has no ed25519),
+so it is loadable in-process; the non-extractable key is the Secure Enclave P-256 one at
+milestone 5. The store's own comment says the same.
