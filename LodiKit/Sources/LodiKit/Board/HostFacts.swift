@@ -57,7 +57,10 @@ public struct FakeHostFactsProvider: HostFactsProvider {
     public func facts(for host: Host) async -> [HostFact] {
         switch host.alias {
         case "sessions":
+            // The device key type is real (from the Keychain), not fake data.
+            let keyKind = SSHKeyStore().usesSecureEnclave() ? "Secure Enclave" : "software"
             return [
+                HostFact(id: "key",    label: "Key",    value: keyKind,                  status: .ok),
                 HostFact(id: "disk",   label: "Disk",   value: "38% of 80 GB",           status: .ok),
                 HostFact(id: "swap",   label: "Swap",   value: "1.9 GB in swap",         status: .warn),
                 HostFact(id: "timers", label: "Timers", value: "cc-sessions-save · last ok", status: .ok),
