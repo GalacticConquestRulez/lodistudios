@@ -82,3 +82,18 @@ landed without pulling it. Pull, do the four, then M4.
 
 **Observed on the Mac, 2026-09-18:** "5 second delay between keystrokes" on an idle prompt —
 exactly the `poll` timeout. Fix 2 (self-pipe wake) is confirmed as the cause, not the network.
+
+---
+
+# 3805df6 — the four fixes, verified
+
+All four done and done right: `LibSSH2.ensure()` behind a `static let` (the only remaining
+`libssh2_exit` is in a comment saying never to call it); a non-blocking self-pipe in the poll
+set, woken by `sendBytes`, `resize` and `stop`, drained on wake; `writeAll` waits on EAGAIN;
+session name `lodi-<host alias>` by default and settable per tab; keys through
+`PaneWriter(backend: session)`. **M3 closed.**
+
+One small thing for M4, not a blocker: keys are converted `[UInt8] → String → [UInt8]` on the
+way through `PaneInput.text`. A multi-byte character split across two `send` calls would be
+mangled by the lossy decode. Add a `PaneInput.bytes([UInt8])` case for raw input and use it from
+the terminal view; `.text` stays for the Assistant and `send-keys`.
