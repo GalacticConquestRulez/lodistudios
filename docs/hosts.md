@@ -2,7 +2,7 @@
 
 | Host | Role | Public IP | Private IP (VPC nyc1) | OS | Host key (ED25519) |
 |---|---|---|---|---|---|
-| **greenflash** | client-facing: 17 sites, Green Flash Studio, its own Claude runner | 142.93.198.162 | 10.116.0.2 | Ubuntu 26.04 LTS | (existing) |
+| **greenflash** | client-facing: 17 sites, Green Flash Studio, its own Claude runner | 142.93.198.162 | 10.116.0.2 | Ubuntu 26.04 LTS | `SHA256:O01ThyuNFaUU+3eGESaMK5hF4q1a6pkIyWtSGF9UtM4` |
 | **Sessions** | LodiStudios session droplet: tmux, the owner's Claude Code runs, push relay, `lodi` CLI | 67.205.136.45 | 10.116.0.6 | Ubuntu 26.04 LTS | `SHA256:QSNdYT45PqF23pHNBeg92CL/Qj0XDfpYm9hZc/4CfJU` |
 
 Both in DigitalOcean nyc1 on the $24 tier (2 vCPU / 4 GB / 80 GB), same VPC, so the hop from
