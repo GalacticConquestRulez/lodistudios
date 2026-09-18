@@ -51,13 +51,25 @@ edited a file in nano over the session — "this worked well." That closes the k
 item from M3 in practice: nano is unusable at five seconds a key. **Still owed for M4:** the
 deliberate Wi-Fi drop-and-return, and tmux-restart detection.
 
-**M4 proven by the owner, 2026-09-18:** Wi-Fi off with the terminal open, then on again —
-"same session back when back on." The reconnect loop and `tmux new -A` did their job; the
-session and its scrollback lived on the droplet throughout. **M4 closed.** One follow-up to
-confirm: whether the reconnect *banner* was visible while offline — the owner described the
-terminal as showing nothing during the outage. If the pane went blank with no banner, the
-state → banner path needs a look; the spec wants the reason shown, not silence.
+**Drop test, 2026-09-18 — a blip survived, the reconnect path not yet exercised.** Wi-Fi off,
+then on; "same session back." But Sessions' log shows **no new login** after the 17:47 one, and
+a reconnect is always a new TCP connection. So the outage was short enough that the existing
+TCP connection survived it: nothing was sent, nothing timed out, the same connection resumed.
+Correct behaviour for a blip — and no banner because nothing disconnected — but M4's loop has
+not run for real yet, and the test exposed a gap:
 
-Remaining from M4's list, not blocking closure: tmux-restart detection, `PaneInput.bytes`.
-Next: M5 (Secure Enclave — `kSecAttrTokenIDSecureEnclave` on the same data-protection-keychain
-path) and M6 (the onward hop: `auth_agent` requested and serviced on the terminal channel).
+**Add SSH keepalives.** Without them a *dead* link (hotspot switch, router reboot, lid closed
+for an hour) is only noticed when a write fails, which can be many minutes. In `connectAndServe`:
+`libssh2_keepalive_config(session, 1, 15)` after the handshake, and call
+`libssh2_keepalive_send(session, &secondsToNext)` from the event loop (use its return value as
+the poll timeout instead of the fixed 5 000 ms). Two missed keepalives → libssh2 errors →
+the loop reconnects within ~30 s of a real drop, with the banner.
+
+**The proof, properly:** Wi-Fi off for a full **two minutes**, terminal open. Expected: within
+~30 s the banner says why; Wi-Fi on; the session reattaches and Sessions' log shows a fresh
+`Accepted publickey … CZNfy3+…`. That login line is the evidence; ask the droplet session to
+read it.
+
+Remaining from M4's list: tmux-restart detection, `PaneInput.bytes`. Then M5 (Secure Enclave —
+`kSecAttrTokenIDSecureEnclave` on the same data-protection-keychain path) and M6 (the onward
+hop: `auth_agent` requested and serviced on the terminal channel).
