@@ -7,7 +7,7 @@ import LodiKit
 /// is registered.
 struct CommandPaletteView: View {
     @Environment(CommandRegistry.self) private var registry
-    @Environment(AppNavigation.self) private var navigation
+    @Environment(Navigator.self) private var navigator
 
     @State private var query = ""
     @FocusState private var fieldFocused: Bool
@@ -18,7 +18,7 @@ struct CommandPaletteView: View {
         ZStack {
             Color.black.opacity(0.5)
                 .ignoresSafeArea()
-                .onTapGesture { navigation.closePalette() }
+                .onTapGesture { navigator.closePalette() }
 
             VStack(spacing: 0) {
                 HStack(spacing: 10) {
@@ -63,7 +63,7 @@ struct CommandPaletteView: View {
         }
         .onAppear { fieldFocused = true }
         #if os(macOS)
-        .onExitCommand { navigation.closePalette() }
+        .onExitCommand { navigator.closePalette() }
         #endif
     }
 
@@ -72,7 +72,7 @@ struct CommandPaletteView: View {
     }
 
     private func run(_ command: Command) {
-        navigation.closePalette()
+        navigator.closePalette()
         Task { try? await registry.run(command.id) }
     }
 }

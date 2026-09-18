@@ -21,7 +21,7 @@ struct AssistantMessage: Identifiable, Sendable {
 /// in v0.2 — the seam is `route(_:)`, everything else stays.
 struct AssistantPanelView: View {
     @Environment(CommandRegistry.self) private var registry
-    @Environment(AppNavigation.self) private var navigation
+    @Environment(Navigator.self) private var navigator
     @Environment(RequestsStore.self) private var requests
 
     @State private var draft = ""
@@ -65,7 +65,7 @@ struct AssistantPanelView: View {
                 .font(.headline)
                 .foregroundStyle(LodiTheme.text)
             Spacer()
-            Button { navigation.toggleAssistant() } label: {
+            Button { navigator.toggleAssistant() } label: {
                 Image(systemName: "xmark")
                     .foregroundStyle(LodiTheme.secondaryText)
             }
@@ -105,7 +105,7 @@ struct AssistantPanelView: View {
             messages.append(.assistant("Running “\(best.title)”."))
             Task { try? await registry.run(best.id) }
         } else {
-            requests.log(text, tool: navigation.target.tool, screen: navigation.target.screenName)
+            requests.log(text, tool: navigator.destination.tool, screen: navigator.destination.screenName)
             messages.append(.assistant("I can’t do that yet — logged it to Requests so it becomes a spec."))
         }
     }

@@ -7,24 +7,24 @@ import LodiKit
 struct RootView: View {
     @Environment(HostInventory.self) private var inventory
     @Environment(CommandRegistry.self) private var registry
-    @Environment(AppNavigation.self) private var navigation
+    @Environment(Navigator.self) private var navigator
 
     var body: some View {
         NavigationSplitView {
-            // The sidebar writes navigation.target directly — the same state the
-            // nav Commands mutate — so there is one source of truth, not a bare
-            // action competing with the registry.
-            List(selection: Binding<NavTarget?>(
-                get: { navigation.target },
-                set: { if let target = $0 { navigation.select(target) } }
+            // The sidebar drives navigation through the same door the nav Commands
+            // use — `navigator.go(to:)` — so there is one source of truth, not a
+            // bare action competing with the registry.
+            List(selection: Binding<Destination?>(
+                get: { navigator.destination },
+                set: { if let destination = $0 { navigator.go(to: destination) } }
             )) {
                 Label("Board", systemImage: "square.grid.2x2")
-                    .tag(NavTarget.board)
+                    .tag(Destination.board)
 
                 Section("Tools") {
                     ForEach(LodiTool.allCases) { tool in
                         Label(tool.title, systemImage: tool.systemImage)
-                            .tag(NavTarget.tool(tool))
+                            .tag(Destination.tool(tool))
                     }
                 }
             }
@@ -35,7 +35,7 @@ struct RootView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(LodiTheme.ground)
 
-                if navigation.isAssistantVisible {
+                if navigator.isAssistantVisible {
                     Divider()
                     AssistantPanelView()
                         .frame(width: 320)
@@ -56,14 +56,14 @@ struct RootView: View {
             }
         }
         .overlay {
-            if navigation.isPaletteVisible {
+            if navigator.isPaletteVisible {
                 CommandPaletteView()
             }
         }
     }
 
     @ViewBuilder private var detail: some View {
-        switch navigation.target {
+        switch navigator.destination {
         case .board:
             BoardView(hosts: inventory.hosts)
         case .tool(let tool):
