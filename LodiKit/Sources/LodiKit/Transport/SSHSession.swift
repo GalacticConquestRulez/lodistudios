@@ -306,7 +306,7 @@ public actor SSHSession {
 
     // MARK: - Host key
 
-    private nonisolated static func verifyHostKey(_ session: OpaquePointer, host: Host) throws {
+    nonisolated static func verifyHostKey(_ session: OpaquePointer, host: Host) throws {
         var len = 0
         var type: Int32 = 0
         guard let hk = libssh2_session_hostkey(session, &len, &type) else {
@@ -356,7 +356,7 @@ public actor SSHSession {
     /// Authenticate through the in-app agent: libssh2 connects to our Unix socket
     /// as an agent client, lists identities, and signs the challenge via the agent
     /// (milestone 2) — the private key stays behind the agent, never in libssh2.
-    private nonisolated static func authenticateViaAgent(
+    nonisolated static func authenticateViaAgent(
         _ session: OpaquePointer, _ sock: Int32, socketPath: String, user: String
     ) throws {
         guard let agent = libssh2_agent_init(session) else {
@@ -391,7 +391,7 @@ public actor SSHSession {
 
     // MARK: - Socket + poll
 
-    private nonisolated static func openSocket(host: String, port: Int) throws -> Int32 {
+    nonisolated static func openSocket(host: String, port: Int) throws -> Int32 {
         var hints = addrinfo(
             ai_flags: 0, ai_family: AF_UNSPEC, ai_socktype: SOCK_STREAM,
             ai_protocol: IPPROTO_TCP, ai_addrlen: 0, ai_canonname: nil, ai_addr: nil, ai_next: nil
@@ -417,7 +417,7 @@ public actor SSHSession {
         throw Failure.socket("cannot connect to \(host):\(port)")
     }
 
-    private nonisolated static func waitSocket(_ sock: Int32, _ session: OpaquePointer) {
+    nonisolated static func waitSocket(_ sock: Int32, _ session: OpaquePointer) {
         var pfd = pollfd(fd: sock, events: 0, revents: 0)
         let directions = libssh2_session_block_directions(session)
         if directions & LIBSSH2_SESSION_BLOCK_INBOUND != 0 { pfd.events |= Int16(POLLIN) }
@@ -426,7 +426,7 @@ public actor SSHSession {
         _ = poll(&pfd, 1, 5_000)
     }
 
-    private nonisolated static func retry(
+    nonisolated static func retry(
         _ session: OpaquePointer, _ sock: Int32, _ op: () -> Int32
     ) -> Int32 {
         var rc = op()
@@ -437,7 +437,7 @@ public actor SSHSession {
         return rc
     }
 
-    private nonisolated static func lastError(_ session: OpaquePointer) -> String {
+    nonisolated static func lastError(_ session: OpaquePointer) -> String {
         var message: UnsafeMutablePointer<CChar>?
         var length: Int32 = 0
         let code = libssh2_session_last_error(session, &message, &length, 0)
