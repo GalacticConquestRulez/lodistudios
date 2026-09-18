@@ -116,8 +116,11 @@ struct LodiStudiosApp: App {
                     let uname = try await session.run("uname -a")
                     lodiWriteAppSupport("m2-uname.txt", "OK exit=\(uname.exitStatus)\n\(uname.stdout)")
                     // M2c: forward the agent and prove a remote shell sees the key.
-                    let forwarded = try await session.run("ssh-add -l", forwardAgent: true)
-                    lodiWriteAppSupport("m2-agent.txt", "OK exit=\(forwarded.exitStatus)\n\(forwarded.stdout)")
+                    let forwarded = try await session.run(
+                        "echo AUTH_SOCK=$SSH_AUTH_SOCK; ssh-add -l 2>&1; echo rc=$?",
+                        forwardAgent: true
+                    )
+                    lodiWriteAppSupport("m2-agent.txt", "exit=\(forwarded.exitStatus)\n\(forwarded.stdout)")
                 } catch {
                     lodiWriteAppSupport("m2-uname.txt", "ERR \(error)\n")
                 }
