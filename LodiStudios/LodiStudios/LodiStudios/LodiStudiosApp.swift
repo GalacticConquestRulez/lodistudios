@@ -37,6 +37,9 @@ struct LodiStudiosApp: App {
     @State private var navigator = Navigator()
     @State private var requests = RequestsStore()
     @State private var terminals = TerminalStore()
+    /// The Board's own agent, so its periodic fact-gathering signs independently
+    /// of the terminal sessions.
+    @State private var boardAgent = SSHAgent(keyStore: SSHKeyStore(), comment: "lodistudios")
 
     var body: some Scene {
         WindowGroup {
@@ -46,10 +49,12 @@ struct LodiStudiosApp: App {
                 .environment(navigator)
                 .environment(requests)
                 .environment(terminals)
+                .environment(\.hostFacts, SSHHostFactsProvider(agentSocketPath: boardAgent.socketPath))
                 .preferredColorScheme(.dark)
                 .task {
                     registerBaselineCommands()
                     ensureDeviceIdentity()
+                    try? boardAgent.start()
                 }
         }
         #if os(macOS)

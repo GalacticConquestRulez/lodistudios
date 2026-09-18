@@ -30,11 +30,14 @@ struct BoardView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .task(id: hosts.map(\.alias)) {
-            var loaded: [String: [HostFact]] = [:]
-            for host in hosts {
-                loaded[host.alias] = await provider.facts(for: host)
+            // Refresh on a loop so the Board stays live and picks up facts once the
+            // agent is ready; each host fills in as its facts return.
+            while !Task.isCancelled {
+                for host in hosts {
+                    facts[host.alias] = await provider.facts(for: host)
+                }
+                try? await Task.sleep(for: .seconds(15))
             }
-            facts = loaded
         }
     }
 }
