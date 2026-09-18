@@ -20,20 +20,37 @@ public struct SSHKeyStore: Sendable {
         case badSignature
     }
 
+    /// Data-protection P-256 key (M4 fallback), and the Secure Enclave key (M5).
+    /// Both live in the data-protection keychain; the Enclave one is non-extractable
+    /// hardware and preferred when the device has an Enclave.
     private let tag: Data
+    private let secureEnclaveTag: Data
 
     public init(tag: String = "com.lodistudios.ssh.device-p256") {
         self.tag = Data(tag.utf8)
+        self.secureEnclaveTag = Data("\(tag).se".utf8)
     }
 
     // MARK: - Key lifecycle
 
+    /// Prefer the Secure Enclave key; create it on first use. If the Enclave is
+    /// unavailable or refuses (older Mac, VM), fall back to the data-protection key
+    /// — signing still works, just in software; M5 becomes a v0.4 item (per spec).
     public func loadOrCreate() throws -> SecKey {
-        if let existing = try loadKey() { return existing }
-        return try createKey()
+        if let enclave = try loadKey(tag: secureEnclaveTag) { return enclave }
+        if let enclave = try? createKey(secureEnclave: true, tag: secureEnclaveTag) { return enclave }
+        if let software = try loadKey(tag: tag) { return software }
+        return try createKey(secureEnclave: false, tag: tag)
     }
 
-    private func loadKey() throws -> SecKey? {
+    /// Whether the active key lives in the Secure Enclave (for reporting).
+    public func usesSecureEnclave() -> Bool {
+        guard let key = try? loadOrCreate(),
+              let attrs = SecKeyCopyAttributes(key) as? [String: Any] else { return false }
+        return (attrs[kSecAttrTokenID as String] as? String) == (kSecAttrTokenIDSecureEnclave as String)
+    }
+
+    private func loadKey(tag: Data) throws -> SecKey? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassKey,
             kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
@@ -41,7 +58,7 @@ public struct SSHKeyStore: Sendable {
             kSecReturnRef as String: true,
             // The data-protection keychain scopes the key to the app's entitlement
             // group, not a per-app ACL — so signing never prompts and survives the
-            // re-signing Xcode does on every debug build. Required for M5's Enclave.
+            // re-signing Xcode does on every debug build.
             kSecUseDataProtectionKeychain as String: true,
         ]
         var ref: CFTypeRef?
@@ -51,18 +68,32 @@ public struct SSHKeyStore: Sendable {
         return (ref as! SecKey)
     }
 
-    private func createKey() throws -> SecKey {
-        let attributes: [String: Any] = [
+    private func createKey(secureEnclave: Bool, tag: Data) throws -> SecKey {
+        var privateAttrs: [String: Any] = [
+            kSecAttrIsPermanent as String: true,
+            kSecAttrApplicationTag as String: tag,
+        ]
+        var attributes: [String: Any] = [
             kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
             kSecAttrKeySizeInBits as String: 256,
             kSecUseDataProtectionKeychain as String: true,
-            kSecPrivateKeyAttrs as String: [
-                kSecAttrIsPermanent as String: true,
-                kSecAttrApplicationTag as String: tag,
-                kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
-            ],
-            // M5: kSecAttrTokenID as String: kSecAttrTokenIDSecureEnclave
         ]
+
+        if secureEnclave {
+            attributes[kSecAttrTokenID as String] = kSecAttrTokenIDSecureEnclave
+            // privateKeyUsage with no user-presence flag → signs without a prompt.
+            var acError: Unmanaged<CFError>?
+            guard let access = SecAccessControlCreateWithFlags(
+                nil, kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly, .privateKeyUsage, &acError
+            ) else {
+                throw KeyError.generate(String(describing: acError?.takeRetainedValue()))
+            }
+            privateAttrs[kSecAttrAccessControl as String] = access
+        } else {
+            privateAttrs[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        }
+        attributes[kSecPrivateKeyAttrs as String] = privateAttrs
+
         var error: Unmanaged<CFError>?
         guard let key = SecKeyCreateRandomKey(attributes as CFDictionary, &error) else {
             throw KeyError.generate(String(describing: error?.takeRetainedValue()))
