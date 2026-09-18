@@ -65,3 +65,17 @@ and a probe can coexist.** Three things, in order of importance:
 Smaller: the terminal is hardcoded to the `sessions` host; fine for v0.1, the host list comes
 with tabs. `try? agent.start()` swallows a failure that would make every connection fail with
 a confusing auth error — surface it.
+
+---
+
+# a4ab097 — M3 proven; the review items are still open
+
+**Seen from Sessions, 2026-09-18 06:10:19 UTC:** `tmux ls` → `lodi: 1 windows (created Fri Sep
+18 06:10:19 2026) (attached)`. The app's terminal is attached to a real tmux session on the
+droplet through embedded libssh2, its own agent, and SwiftTerm — on the Mac. That is the
+milestone: a terminal you type into, with the session living in the cloud. Closed as proven.
+
+**Not yet done, and they matter before daily use:** `libssh2_exit` still called per session
+(second tab will crash the first), no self-pipe (idle-prompt keystrokes wait for `poll`),
+keystrokes bypass `PaneWriter`, session name hardcoded `lodi`. The commits since the review
+landed without pulling it. Pull, do the four, then M4.
