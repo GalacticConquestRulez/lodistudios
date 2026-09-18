@@ -32,21 +32,21 @@ public final class HostInventory {
     /// The two hosts that exist today (docs/hosts.md), used to bootstrap v0.1.
     /// The Mac reaches `sessions` (agent forwarded), and `greenflash` is reached
     /// *through* it over the private VPC address — never holding a key itself.
-    public static var known: [Host] {
+    public nonisolated static var known: [Host] {
         [
             Host(
                 alias: "sessions",
                 hostName: "67.205.136.45",
                 role: "LodiStudios session droplet — tmux, Claude runs, push relay",
                 forwardAgent: true,
-                hostKeyFingerprintSHA256: "SHA256:QSNdYT45PqF23pHNBeg92CL/Qj0XDfpYm9hZc/4CfJU"
+                hostKeyFingerprintSHA256: "SHA256:II8jMSMrtS7W+dkLnAxSIYuiDg1JLmwDqCpncYZlkcw"
             ),
             Host(
                 alias: "greenflash",
                 hostName: "10.116.0.2",
                 role: "client-facing: 17 sites, Green Flash Studio",
                 proxyJump: "sessions",
-                hostKeyFingerprintSHA256: "SHA256:O01ThyuNFaUU+3eGESaMK5hF4q1a6pkIyWtSGF9UtM4"
+                hostKeyFingerprintSHA256: "SHA256:m133JYrfac8FQ+3LCd28GMZQcYcJUg/4iIRNd4PBHp4"
             ),
         ]
     }

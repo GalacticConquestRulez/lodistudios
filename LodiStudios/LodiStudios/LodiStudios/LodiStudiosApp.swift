@@ -16,6 +16,18 @@ import UIKit
     #endif
 }
 
+/// Write a small file under the app's Application Support/LodiStudios directory.
+/// Used to mirror the public key and the M1 probe result where they can be read.
+func lodiWriteAppSupport(_ name: String, _ text: String) {
+    let base = (try? FileManager.default.url(
+        for: .applicationSupportDirectory, in: .userDomainMask,
+        appropriateFor: nil, create: true
+    )) ?? URL.temporaryDirectory
+    let dir = base.appendingPathComponent("LodiStudios", isDirectory: true)
+    try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    try? Data(text.utf8).write(to: dir.appendingPathComponent(name), options: .atomic)
+}
+
 /// The app is one app for five tools: same chrome, same sidebar, same command
 /// surface (docs/plan.md). Dark only, black ground, white text.
 @main
@@ -36,6 +48,9 @@ struct LodiStudiosApp: App {
                 .task {
                     registerBaselineCommands()
                     ensureDeviceIdentity()
+                    // M1 proof: connect to Sessions and mirror the result. Doubles
+                    // as the Board's reachability probe once facts go live.
+                    try? await registry.run("net.sessionsUname")
                 }
         }
         #if os(macOS)
@@ -52,15 +67,7 @@ struct LodiStudiosApp: App {
     /// to a host's authorized_keys. The private half never leaves the Keychain.
     @MainActor private func ensureDeviceIdentity() {
         guard let line = try? SSHKeyStore().publicKeyOpenSSH(comment: Self.keyComment) else { return }
-        let base = (try? FileManager.default.url(
-            for: .applicationSupportDirectory, in: .userDomainMask,
-            appropriateFor: nil, create: true
-        )) ?? URL.temporaryDirectory
-        let dir = base.appendingPathComponent("LodiStudios", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        try? Data((line + "\n").utf8).write(
-            to: dir.appendingPathComponent("id_ed25519.pub"), options: .atomic
-        )
+        lodiWriteAppSupport("id_ecdsa.pub", line + "\n")
     }
 
     /// The baseline commands, so the registry is real from day one and the
@@ -95,6 +102,17 @@ struct LodiStudiosApp: App {
                     keywords: ["ssh", "key", "authorized", "clipboard", "identity"]) { _ in
                 let line = (try? SSHKeyStore().publicKeyOpenSSH(comment: Self.keyComment)) ?? ""
                 await MainActor.run { lodiCopyToPasteboard(line) }
+            },
+            Command(id: "net.sessionsUname", title: "Connect to Sessions, run uname",
+                    subtitle: "Milestone 1 proof — SSH to the session droplet",
+                    keywords: ["ssh", "connect", "sessions", "uname", "probe"]) { _ in
+                guard let sessions = HostInventory.known.first(where: { $0.alias == "sessions" }) else { return }
+                do {
+                    let output = try await SSHSession(host: sessions).run("uname -a")
+                    lodiWriteAppSupport("m1-result.txt", "OK exit=\(output.exitStatus)\n\(output.stdout)")
+                } catch {
+                    lodiWriteAppSupport("m1-result.txt", "ERR \(error)\n")
+                }
             },
         ])
 

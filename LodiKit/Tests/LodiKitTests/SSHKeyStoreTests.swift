@@ -1,33 +1,50 @@
 import Testing
 import Foundation
-import CryptoKit
 @testable import LodiKit
 
 struct SSHKeyStoreTests {
 
-    /// The OpenSSH encoding is testable without the Keychain: check structure
-    /// against a fixed public key rather than a magic base64 constant.
-    @Test func opensshEncodingIsWellFormed() throws {
-        let key = Curve25519.Signing.PrivateKey()
-        let line = SSHKeyStore.openSSHEd25519(key.publicKey, comment: "lodi@test")
+    /// The OpenSSH line is a well-formed ecdsa-sha2-nistp256 entry built from a
+    /// fixed EC point — no Keychain needed.
+    @Test func opensshLineIsWellFormed() throws {
+        // 0x04 || X || Y, 65 bytes (contents arbitrary for an encoding test).
+        let point = Data([0x04] + Array(1...64).map { UInt8($0) })
+        let line = SSHKeyStore.openSSHLine(point: point, comment: "lodi@test")
 
         let parts = line.split(separator: " ")
         #expect(parts.count == 3)
-        #expect(parts[0] == "ssh-ed25519")
+        #expect(parts[0] == "ecdsa-sha2-nistp256")
         #expect(parts[2] == "lodi@test")
 
         let blob = try #require(Data(base64Encoded: String(parts[1])))
-        // string("ssh-ed25519") = 4 + 11 = 15 bytes; string(32-byte key) = 4 + 32 = 36; total 51.
-        #expect(blob.count == 51)
+        // string("ecdsa-sha2-nistp256")=4+19, string("nistp256")=4+8, string(point)=4+65.
+        #expect(blob.count == (4 + 19) + (4 + 8) + (4 + 65))
+    }
 
-        // First length-prefixed field is exactly "ssh-ed25519".
-        let nameLen = blob.prefix(4).reduce(0) { ($0 << 8) | Int($1) }
-        #expect(nameLen == 11)
-        let name = String(decoding: blob[4..<4 + nameLen], as: UTF8.self)
-        #expect(name == "ssh-ed25519")
+    /// An mpint whose top bit is set gets a leading zero; a small one does not.
+    @Test func mpintPadsWhenHighBitSet() {
+        let high = SSHKeyStore.sshMPInt(Data([0xFF, 0x01]))
+        #expect(Array(high) == [0, 0, 0, 3, 0x00, 0xFF, 0x01])
 
-        // Second field carries the exact 32 raw public-key bytes.
-        let keyBytes = blob.suffix(32)
-        #expect(Data(keyBytes) == key.publicKey.rawRepresentation)
+        let low = SSHKeyStore.sshMPInt(Data([0x7F]))
+        #expect(Array(low) == [0, 0, 0, 1, 0x7F])
+    }
+
+    /// A DER SEQUENCE{INTEGER r, INTEGER s} parses and re-encodes as mpint(r)||mpint(s).
+    @Test func parsesDERAndReencodes() throws {
+        // SEQUENCE(6) { INTEGER(1)=0x01, INTEGER(1)=0x02 }
+        let der = Data([0x30, 0x06, 0x02, 0x01, 0x01, 0x02, 0x01, 0x02])
+        let (r, s) = try SSHKeyStore.parseECDSADER(der)
+        #expect(Array(r) == [0x01])
+        #expect(Array(s) == [0x02])
+
+        let blob = try SSHKeyStore.sshSignatureBlob(fromDER: der)
+        #expect(Array(blob) == [0, 0, 0, 1, 0x01, 0, 0, 0, 1, 0x02])
+    }
+
+    @Test func rejectsNonSequenceDER() {
+        #expect(throws: SSHKeyStore.KeyError.self) {
+            _ = try SSHKeyStore.parseECDSADER(Data([0x02, 0x01, 0x01]))
+        }
     }
 }

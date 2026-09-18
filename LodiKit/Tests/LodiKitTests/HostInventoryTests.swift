@@ -33,8 +33,9 @@ struct HostInventoryTests {
         #expect(greenflash?.proxyJump == "sessions")
         #expect(greenflash?.hostName == "10.116.0.2")
 
-        // Host keys are pinned from docs/hosts.md; the transport refuses a mismatch.
-        #expect(sessions?.hostKeyFingerprintSHA256 == "SHA256:QSNdYT45PqF23pHNBeg92CL/Qj0XDfpYm9hZc/4CfJU")
-        #expect(greenflash?.hostKeyFingerprintSHA256 == "SHA256:O01ThyuNFaUU+3eGESaMK5hF4q1a6pkIyWtSGF9UtM4")
+        // ECDSA host keys are pinned (not ed25519): libssh2's mbedTLS backend
+        // negotiates ecdsa-sha2-nistp256, so that's the key the app verifies.
+        #expect(sessions?.hostKeyFingerprintSHA256 == "SHA256:II8jMSMrtS7W+dkLnAxSIYuiDg1JLmwDqCpncYZlkcw")
+        #expect(greenflash?.hostKeyFingerprintSHA256 == "SHA256:m133JYrfac8FQ+3LCd28GMZQcYcJUg/4iIRNd4PBHp4")
     }
 }
