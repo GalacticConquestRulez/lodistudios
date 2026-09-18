@@ -42,9 +42,9 @@ Sessions into greenflash can use the private address.
 ## Device keys authorised on Sessions
 | Device | Key | Fingerprint | Added |
 |---|---|---|---|
-| Tanner's MacBook Pro (M1 Max) | ECDSA P-256 `SecKey` in the Keychain, app-generated (`SSHKeyStore`); replaced the ed25519 key, which the mbedTLS build cannot use (its line was removed from Sessions) | `SHA256:lH2BtBgAl5Bgsa5CO7/vrdiisEjeU9XgSNPkJ1ZHlUg` | 2026-09-18 |
+| Tanner's MacBook Pro (M1 Max) — login-keychain key, **superseded and removed from Sessions** (993c0e3 moved the key to the data-protection keychain) | ECDSA P-256 | `SHA256:lH2BtBgAl5Bgsa5CO7/vrdiisEjeU9XgSNPkJ1ZHlUg` | 2026-09-18 |
 
-| Tanner's MacBook Pro — second app build (release/archive signing gives the app a separate Keychain item, hence a second key with the same comment) | ECDSA P-256 `SecKey` | `SHA256:CZNfy3+9QnRpQLmh207GWZKoWHZm2pBA7Va0AC8G8Dw` | 2026-09-18 |
+| **Tanner's MacBook Pro (M1 Max) — current** | ECDSA P-256 `SecKey` in the data-protection keychain (`kSecUseDataProtectionKeychain`, access group `LODI.LodiStudios`), so signing never prompts and survives rebuilds; the keychain the Secure Enclave uses at M5 | `SHA256:CZNfy3+9QnRpQLmh207GWZKoWHZm2pBA7Va0AC8G8Dw` | 2026-09-18 |
 
 The iPhone gets its own key when the iOS build first runs; never copy a key between devices.
 Note on M1's key: ed25519 is a CryptoKit key stored as Keychain data (SecKey has no ed25519),

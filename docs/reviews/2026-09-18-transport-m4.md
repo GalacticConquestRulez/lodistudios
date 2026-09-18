@@ -31,3 +31,16 @@ and six app logins between 06:10 and 06:19 — reconnections happening in practi
 
 Then M5 (Secure Enclave — one attribute on the same SecKey path) and M6 (the onward hop, which
 needs `auth_agent` requested and serviced on the terminal channel — see the M3 review).
+
+---
+
+# 993c0e3 — device key moved to the data-protection keychain
+
+Right fix for a real problem: Xcode re-signs a debug build on every build, so a login-keychain
+ACL never matched twice and every signature prompted. The data-protection keychain scopes the
+key to the entitlement group instead — no prompt, survives rebuilds, and it is the keychain the
+Secure Enclave key lives in at M5, so M5 is now genuinely one attribute away. The fresh key
+(`SHA256:CZNfy3+…`) is authorised on Sessions; the old one is removed.
+
+**Still open from M4:** tmux-restart detection (`has-session` before the attach) and the
+drop-and-return proof; `PaneInput.bytes` from M3. None of the three are in this commit.
