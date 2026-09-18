@@ -73,21 +73,31 @@ public actor SSHSession {
 
     private let host: Host
     private let keyStore: SSHKeyStore
+    /// When set, authenticate through the in-app agent at this Unix-socket path
+    /// (milestone 2) instead of the direct sign callback (milestone 1).
+    private let agentSocketPath: String?
 
-    public init(host: Host, keyStore: SSHKeyStore = SSHKeyStore()) {
+    public init(host: Host, keyStore: SSHKeyStore = SSHKeyStore(), agentSocketPath: String? = nil) {
         self.host = host
         self.keyStore = keyStore
+        self.agentSocketPath = agentSocketPath
     }
 
     /// Connect, verify the host key, authenticate, run `command`, return its stdout.
-    public func run(_ command: String) throws -> Output {
-        try Self.execute(command, host: host, keyStore: keyStore)
+    /// `forwardAgent` requests agent forwarding on the channel so a remote shell
+    /// can reach this app's agent.
+    public func run(_ command: String, forwardAgent: Bool = false) throws -> Output {
+        try Self.execute(
+            command, host: host, keyStore: keyStore,
+            agentSocketPath: agentSocketPath, forwardAgent: forwardAgent
+        )
     }
 
     // MARK: - The blocking libssh2 flow
 
     private nonisolated static func execute(
-        _ command: String, host: Host, keyStore: SSHKeyStore
+        _ command: String, host: Host, keyStore: SSHKeyStore,
+        agentSocketPath: String?, forwardAgent: Bool
     ) throws -> Output {
         _ = libssh2_init(0)
         defer { libssh2_exit() }
@@ -108,13 +118,17 @@ public actor SSHSession {
         guard rc == 0 else { throw Failure.handshake(lastError(session)) }
 
         try verifyHostKey(session, host: host)
-        try authenticate(session, sock, host: host, keyStore: keyStore)
+        if let agentSocketPath {
+            try authenticateViaAgent(session, sock, socketPath: agentSocketPath, user: host.user)
+        } else {
+            try authenticate(session, sock, host: host, keyStore: keyStore)
+        }
 
-        return try runExec(command, session: session, sock: sock)
+        return try runExec(command, session: session, sock: sock, forwardAgent: forwardAgent)
     }
 
     private nonisolated static func runExec(
-        _ command: String, session: OpaquePointer, sock: Int32
+        _ command: String, session: OpaquePointer, sock: Int32, forwardAgent: Bool
     ) throws -> Output {
         var channel: OpaquePointer?
         repeat {
@@ -130,6 +144,12 @@ public actor SSHSession {
         defer {
             libssh2_channel_close(channel)
             libssh2_channel_free(channel)
+        }
+
+        // Request agent forwarding for this channel so a remote shell can reach
+        // our agent. Best-effort: if the server declines we still run the command.
+        if forwardAgent {
+            _ = retry(session, sock) { libssh2_channel_request_auth_agent(channel) }
         }
 
         let rc = retry(session, sock) {
@@ -204,6 +224,42 @@ public actor SSHSession {
             if let signError = context.error { throw Failure.authFailed("sign: \(signError)") }
             throw Failure.authFailed(lastError(session))
         }
+    }
+
+    /// Authenticate through the in-app agent: libssh2 connects to our Unix socket
+    /// as an agent client, lists identities, and signs the challenge via the agent
+    /// (milestone 2) — the private key stays behind the agent, never in libssh2.
+    private nonisolated static func authenticateViaAgent(
+        _ session: OpaquePointer, _ sock: Int32, socketPath: String, user: String
+    ) throws {
+        guard let agent = libssh2_agent_init(session) else {
+            throw Failure.authFailed("agent init failed")
+        }
+        defer { libssh2_agent_free(agent) }
+
+        socketPath.withCString { libssh2_agent_set_identity_path(agent, $0) }
+        guard retry(session, sock, { libssh2_agent_connect(agent) }) == 0 else {
+            throw Failure.authFailed("agent connect: \(lastError(session))")
+        }
+        defer { libssh2_agent_disconnect(agent) }
+
+        guard retry(session, sock, { libssh2_agent_list_identities(agent) }) == 0 else {
+            throw Failure.authFailed("agent list: \(lastError(session))")
+        }
+
+        var identity: UnsafeMutablePointer<libssh2_agent_publickey>?
+        var authenticated = false
+        while true {
+            let getResult = libssh2_agent_get_identity(agent, &identity, identity)
+            if getResult == 1 { break }              // no more identities
+            if getResult < 0 { throw Failure.authFailed("agent get identity") }
+            guard let id = identity else { break }
+            if retry(session, sock, { libssh2_agent_userauth(agent, user, id) }) == 0 {
+                authenticated = true
+                break
+            }
+        }
+        guard authenticated else { throw Failure.authFailed("agent userauth: \(lastError(session))") }
     }
 
     // MARK: - Socket + poll

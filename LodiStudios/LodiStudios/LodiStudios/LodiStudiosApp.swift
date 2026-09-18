@@ -104,14 +104,22 @@ struct LodiStudiosApp: App {
                 await MainActor.run { lodiCopyToPasteboard(line) }
             },
             Command(id: "net.sessionsUname", title: "Connect to Sessions, run uname",
-                    subtitle: "Milestone 1 proof — SSH to the session droplet",
-                    keywords: ["ssh", "connect", "sessions", "uname", "probe"]) { _ in
+                    subtitle: "Transport proof — SSH to the session droplet via the in-app agent",
+                    keywords: ["ssh", "connect", "sessions", "uname", "probe", "agent"]) { _ in
                 guard let sessions = HostInventory.known.first(where: { $0.alias == "sessions" }) else { return }
+                let agent = SSHAgent(keyStore: SSHKeyStore(), comment: Self.keyComment)
                 do {
-                    let output = try await SSHSession(host: sessions).run("uname -a")
-                    lodiWriteAppSupport("m1-result.txt", "OK exit=\(output.exitStatus)\n\(output.stdout)")
+                    try agent.start()
+                    defer { agent.stop() }
+                    let session = SSHSession(host: sessions, agentSocketPath: agent.socketPath)
+                    // M2b: authenticate through the agent.
+                    let uname = try await session.run("uname -a")
+                    lodiWriteAppSupport("m2-uname.txt", "OK exit=\(uname.exitStatus)\n\(uname.stdout)")
+                    // M2c: forward the agent and prove a remote shell sees the key.
+                    let forwarded = try await session.run("ssh-add -l", forwardAgent: true)
+                    lodiWriteAppSupport("m2-agent.txt", "OK exit=\(forwarded.exitStatus)\n\(forwarded.stdout)")
                 } catch {
-                    lodiWriteAppSupport("m1-result.txt", "ERR \(error)\n")
+                    lodiWriteAppSupport("m2-uname.txt", "ERR \(error)\n")
                 }
             },
         ])
