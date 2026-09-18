@@ -33,6 +33,17 @@ Sessions into greenflash can use the private address.
   Mac and the app's per-device keys drive this box; the trust should point Sessions → greenflash,
   never the reverse), `Termius` (the owner's).
 
+## M6 prep (2026-09-18) — the onward hop is ready on the droplet side
+- **greenflash** `authorized_keys` now holds the Mac's Secure Enclave key
+  (`SHA256:48ov0n3CH6TLc6dCizKw4EaBg9ALQBFwd25QVidLsg4`) — the only device key on that box.
+- **Sessions** `~/.ssh/config` has `Host greenflash` → `10.116.0.2` (the private VPC address),
+  `User root`, `ForwardAgent no`; `known_hosts` is pre-seeded with greenflash's ECDSA and
+  ed25519 host keys, so the hop never prompts. No key exists on Sessions for it: auth comes
+  from the forwarded agent on the owner's device.
+- **Proof, from a terminal tab in the app:** `ssh greenflash 'hostname'` → `greenflash`
+  (whatever the GF box's hostname prints) with no key on Sessions; and the app's agent logs the
+  `session-bind` it received for the hop.
+
 ## To do
 - [ ] Sign Claude Code in on Sessions (owner's choice: copy greenflash's credentials, or log in there).
 - [ ] Restrict greenflash's sshd to the VPC address of Sessions plus the owner's devices.
