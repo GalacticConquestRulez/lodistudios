@@ -71,6 +71,32 @@ public final class CommandRegistry {
             .map { $0.0 }
     }
 
+    /// A natural-language match for the Assistant: the available command whose
+    /// title, subtitle and keywords overlap the most words in `text`, or nil if
+    /// none overlap. Where `search` is tuned for ⌘K prefix typing, this tolerates
+    /// a phrasing like "open the assistant" — the keyword "open" is on every
+    /// nav command, so overlap, not prefix, is what disambiguates. This is the
+    /// v0.1 local router; Haiku routing later replaces the *caller*, not this seam.
+    public func bestMatch(for text: String) -> Command? {
+        let words = text.lowercased()
+            .split { !$0.isLetter && !$0.isNumber }
+            .map(String.init)
+        guard !words.isEmpty else { return nil }
+
+        func score(_ command: Command) -> Int {
+            let hay = ([command.title, command.subtitle] + command.keywords)
+                .joined(separator: " ")
+                .lowercased()
+            return words.reduce(0) { $0 + (hay.contains($1) ? 1 : 0) }
+        }
+
+        return available
+            .map { ($0, score($0)) }
+            .filter { $0.1 > 0 }
+            .max { $0.1 < $1.1 }?
+            .0
+    }
+
     // MARK: Invocation
 
     /// The single door every trigger goes through. Throws rather than silently

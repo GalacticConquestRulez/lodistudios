@@ -103,7 +103,7 @@ struct AssistantPanelView: View {
     }
 
     private func route(_ text: String) {
-        if let best = bestCommand(for: text) {
+        if let best = registry.bestMatch(for: text) {
             messages.append(.assistant("Running “\(best.title)”."))
             Task {
                 do {
@@ -127,29 +127,6 @@ struct AssistantPanelView: View {
         case .missingParameter(let name): return "“\(command.title)” needs “\(name)” — tell me that and I’ll run it."
         case .unknown:                    return "That command doesn’t exist anymore."
         }
-    }
-
-    /// Word-overlap over each available command's title, subtitle and keywords.
-    /// Unlike ⌘K's prefix search this tolerates a natural phrasing like
-    /// "open WebPro" or "turn on the assistant".
-    private func bestCommand(for text: String) -> Command? {
-        let words = text.lowercased()
-            .split { !$0.isLetter && !$0.isNumber }
-            .map(String.init)
-        guard !words.isEmpty else { return nil }
-
-        func score(_ command: Command) -> Int {
-            let hay = ([command.title, command.subtitle] + command.keywords)
-                .joined(separator: " ")
-                .lowercased()
-            return words.reduce(0) { $0 + (hay.contains($1) ? 1 : 0) }
-        }
-
-        return registry.available
-            .map { ($0, score($0)) }
-            .filter { $0.1 > 0 }
-            .max { $0.1 < $1.1 }?
-            .0
     }
 }
 
