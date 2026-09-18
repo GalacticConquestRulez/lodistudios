@@ -105,10 +105,27 @@ struct AssistantPanelView: View {
     private func route(_ text: String) {
         if let best = bestCommand(for: text) {
             messages.append(.assistant("Running “\(best.title)”."))
-            Task { try? await registry.run(best.id) }
+            Task {
+                do {
+                    try await registry.run(best.id)
+                } catch {
+                    messages.append(.assistant(Self.failure(for: error, command: best)))
+                }
+            }
         } else {
             requests.log(text, tool: navigator.destination.tool, screen: navigator.destination.screenName)
             messages.append(.assistant("I can’t do that yet — logged it to Requests so it becomes a spec."))
+        }
+    }
+
+    /// A spoken reason when a matched command won't run, rather than a silent
+    /// no-op the owner has to notice by the screen not changing.
+    private static func failure(for error: Error, command: Command) -> String {
+        guard let error = error as? CommandError else { return "“\(command.title)” failed." }
+        switch error {
+        case .unavailable:                return "I can’t run “\(command.title)” right now — it isn’t available."
+        case .missingParameter(let name): return "“\(command.title)” needs “\(name)” — tell me that and I’ll run it."
+        case .unknown:                    return "That command doesn’t exist anymore."
         }
     }
 

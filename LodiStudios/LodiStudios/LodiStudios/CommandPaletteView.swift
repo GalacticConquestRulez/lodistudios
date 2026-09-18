@@ -10,6 +10,7 @@ struct CommandPaletteView: View {
     @Environment(Navigator.self) private var navigator
 
     @State private var query = ""
+    @State private var notice: String?
     @FocusState private var fieldFocused: Bool
 
     private var results: [Command] { registry.search(query) }
@@ -30,10 +31,20 @@ struct CommandPaletteView: View {
                         .foregroundStyle(LodiTheme.text)
                         .focused($fieldFocused)
                         .onSubmit(runFirst)
+                        .onChange(of: query) { notice = nil }
                 }
                 .padding(16)
 
                 Divider().overlay(LodiPalette.paper.opacity(0.1))
+
+                if let notice {
+                    Text(notice)
+                        .font(.callout)
+                        .foregroundStyle(LodiTheme.statusWarn)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                }
 
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 0) {
@@ -78,8 +89,25 @@ struct CommandPaletteView: View {
     }
 
     private func run(_ command: Command) {
-        navigator.closePalette()
-        Task { try? await registry.run(command.id) }
+        Task {
+            do {
+                try await registry.run(command.id)
+                navigator.closePalette()
+            } catch {
+                notice = Self.message(for: error, command: command)
+            }
+        }
+    }
+
+    /// A one-line reason when a command won't run, shown under the field rather
+    /// than closing on a silent no-op.
+    private static func message(for error: Error, command: Command) -> String {
+        guard let error = error as? CommandError else { return "“\(command.title)” failed." }
+        switch error {
+        case .unavailable:                return "“\(command.title)” isn’t available right now."
+        case .missingParameter(let name): return "“\(command.title)” needs “\(name)”."
+        case .unknown:                    return "No such command."
+        }
     }
 }
 
