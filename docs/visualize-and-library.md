@@ -81,9 +81,34 @@ Library ──references──▶ Brief ──▶ Prompt (effective view, lint) 
 - **Scope** — a global library plus per-client sub-libraries; provenance on everything. In
   LodiStudios it lives in CloudKit (personal); the licensed studio keeps its own in its database.
 
+### Auto-library: things are catalogued as they are made
+Asked for on 2026-09-18: *"auto sort organize tag and library them as they're created
+automatically on your end say the drones from DGM and roamers from JBN."*
+
+The intake is the run itself, not a form:
+- **Every run ends with a catalog step.** From the run's diff and report, the AI lists each
+  reusable thing it created or materially changed — an effect, a component, an asset, a copy
+  block, a palette — and files it: name, site, client, file paths, a screenshot or short clip
+  captured from the preview, the concept it implements, and the Playbook rules that govern it.
+- **The owner's names win.** If he has named a thing — DGM's drones are "swatters", JBN's
+  "roamers" — the glossary supplies the name and the AI never invents another. A thing he has
+  not named gets a plain descriptive name and a *needs a name* flag he can answer in one tap.
+- **Sorted automatically** into Effects / Components / Assets / Copy / Palettes, under the
+  client's sub-library and the global one; tags and keywords derived from the code, the brief
+  that asked for it, and what it looks like (vision on the screenshot). Duplicates across sites
+  are linked as variants of one pattern, not filed twice.
+- **Retroactive harvest.** A one-time sweep of the sites that already exist (Drone God Max,
+  JBN, greenflashusa.com) seeds the Library with the settled patterns — swatters, roamers, the
+  love-letters carousel, the open-house scenes, the SSG motion effects — so the first brief can
+  already draw on them.
+- **Nothing is catalogued silently.** The run report shows "added to the Library: 3 items";
+  the Board shows new items until seen. Hidden automation is how a library fills with junk.
+
+
 ## Order
 1. Prompt Ledger, effective-prompt view and Prompt Lint — cheapest, and they cut credits
    immediately.
-2. Library v1 — items, tags, notes, licence, retrieval into prompts.
+2. Library v1 — items, tags, notes, licence, retrieval into prompts, and the auto-catalog
+   step at the end of every run; retroactive harvest of the existing sites.
 3. Map and Roadmap, with storyboards and the cost lens — arrives with AppPro.
 4. Client shortlists, alongside client marks (`docs/webpro-markup.md`).
