@@ -36,6 +36,7 @@ struct LodiStudiosApp: App {
     @State private var inventory = HostInventory(hosts: HostInventory.known)
     @State private var navigator = Navigator()
     @State private var requests = RequestsStore()
+    @State private var terminals = TerminalStore()
 
     var body: some Scene {
         WindowGroup {
@@ -44,6 +45,7 @@ struct LodiStudiosApp: App {
                 .environment(inventory)
                 .environment(navigator)
                 .environment(requests)
+                .environment(terminals)
                 .preferredColorScheme(.dark)
                 .task {
                     registerBaselineCommands()

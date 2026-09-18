@@ -4,15 +4,21 @@ import CLibSSH2
 
 /// A live, interactive SSH session: a PTY channel running tmux, its output fanned
 /// through a `PaneOutputBroadcaster` and its input taken behind `PaneBackend`
-/// (docs/specs/transport-v0.1.md, milestone 3). Reuses SSHSession's proven
+/// (docs/specs/transport-v0.1.md, milestones 3 and 4). Reuses SSHSession's proven
 /// connect / host-key / agent-auth path.
 ///
-/// libssh2 is single-threaded per session, so one dedicated thread owns the
-/// channel: it polls for output and drains queued input and resizes. A self-pipe
-/// sits in the same poll set so a keystroke wakes the loop immediately instead of
-/// waiting out the poll timeout (docs/reviews/2026-09-18-transport-m3.md).
+/// The dedicated loop reconnects on its own: when the channel ends (a tmux detach,
+/// a dropped network), it reports `.disconnected` and retries with backoff, then
+/// re-runs `tmux new -A -s <name>` so scrollback comes back from the droplet, never
+/// from the app's memory. A self-pipe in the poll set keeps keystrokes lag-free.
 public final class SSHTerminalSession: @unchecked Sendable, PaneBackend {
-    /// Fan-out of remote output. Add the terminal view as a sink before `start()`.
+    public enum State: Sendable, Equatable {
+        case connecting
+        case connected
+        case disconnected(reason: String?)
+    }
+
+    /// Fan-out of remote output. Add a sink (the terminal view) any time.
     public let broadcaster = PaneOutputBroadcaster()
     public let pane: PaneID
 
@@ -20,14 +26,15 @@ public final class SSHTerminalSession: @unchecked Sendable, PaneBackend {
     private let keyStore: SSHKeyStore
     private let agentSocketPath: String?
     private let tmuxSession: String
-    private let initialCols: Int32
-    private let initialRows: Int32
-    private let onClosed: @Sendable (String?) -> Void
+    private let onState: @Sendable (State) -> Void
 
     private let lock = NSLock()
     private var inputQueue: [UInt8] = []
     private var pendingSize: (Int32, Int32)?
+    private var cols: Int32
+    private var rows: Int32
     private var running = true
+    private var started = false
 
     /// Self-pipe: [read, write]. Writing a byte wakes the poll in the loop.
     private var wakePipe: [Int32] = [-1, -1]
@@ -39,15 +46,15 @@ public final class SSHTerminalSession: @unchecked Sendable, PaneBackend {
         tmuxSession: String? = nil,
         cols: Int32 = 80,
         rows: Int32 = 24,
-        onClosed: @escaping @Sendable (String?) -> Void = { _ in }
+        onState: @escaping @Sendable (State) -> Void = { _ in }
     ) {
         self.host = host
         self.keyStore = keyStore
         self.agentSocketPath = agentSocketPath
         self.tmuxSession = tmuxSession ?? "lodi-\(host.alias)"
-        self.initialCols = cols
-        self.initialRows = rows
-        self.onClosed = onClosed
+        self.cols = cols
+        self.rows = rows
+        self.onState = onState
         self.pane = PaneID(host.alias)
 
         if pipe(&wakePipe) == 0 {
@@ -55,7 +62,13 @@ public final class SSHTerminalSession: @unchecked Sendable, PaneBackend {
         }
     }
 
+    /// Start the reconnecting loop once. Safe to call repeatedly.
     public func start() {
+        lock.lock()
+        guard !started else { lock.unlock(); return }
+        started = true
+        lock.unlock()
+
         let thread = Thread { [weak self] in self?.loop() }
         thread.name = "ssh-terminal"
         thread.stackSize = 2 << 20
@@ -74,7 +87,7 @@ public final class SSHTerminalSession: @unchecked Sendable, PaneBackend {
     }
 
     public func resize(cols: Int32, rows: Int32) {
-        lock.lock(); pendingSize = (cols, rows); lock.unlock()
+        lock.lock(); self.cols = cols; self.rows = rows; pendingSize = (cols, rows); lock.unlock()
         wake()
     }
 
@@ -92,7 +105,11 @@ public final class SSHTerminalSession: @unchecked Sendable, PaneBackend {
         _ = write(wakePipe[1], &byte, 1)
     }
 
-    // MARK: - The single-threaded libssh2 loop
+    private func isRunning() -> Bool {
+        lock.lock(); defer { lock.unlock() }; return running
+    }
+
+    // MARK: - Reconnecting loop
 
     private func loop() {
         LibSSH2.ensure()
@@ -100,63 +117,78 @@ public final class SSHTerminalSession: @unchecked Sendable, PaneBackend {
             if wakePipe[0] >= 0 { close(wakePipe[0]) }
             if wakePipe[1] >= 0 { close(wakePipe[1]) }
         }
-        do {
-            let sock = try SSHSession.openSocket(host: host.hostName, port: host.port)
-            defer { close(sock) }
 
-            guard let session = libssh2_session_init_ex(nil, nil, nil, nil) else {
-                throw SSHSession.Failure.handshake("session init failed")
+        var backoff: Int32 = 0
+        while isRunning() {
+            onState(.connecting)
+            do {
+                try connectAndServe()          // reports .connected; returns on detach/EOF
+                onState(.disconnected(reason: nil))
+            } catch {
+                onState(.disconnected(reason: "\(error)"))
             }
-            defer {
-                libssh2_session_disconnect_ex(session, SSH_DISCONNECT_BY_APPLICATION, "bye", "")
-                libssh2_session_free(session)
-            }
-            libssh2_session_set_blocking(session, 0)
-
-            guard SSHSession.retry(session, sock, { libssh2_session_handshake(session, sock) }) == 0 else {
-                throw SSHSession.Failure.handshake(SSHSession.lastError(session))
-            }
-            try SSHSession.verifyHostKey(session, host: host)
-            if let agentSocketPath {
-                try SSHSession.authenticateViaAgent(session, sock, socketPath: agentSocketPath, user: host.user)
-            } else {
-                throw SSHSession.Failure.authFailed("terminal session requires the agent")
-            }
-
-            var channel: OpaquePointer?
-            repeat {
-                channel = libssh2_channel_open_ex(session, "session", 7, 2 * 1024 * 1024, 32_768, nil, 0)
-                if channel == nil {
-                    if libssh2_session_last_errno(session) == LIBSSH2_ERROR_EAGAIN {
-                        SSHSession.waitSocket(sock, session); continue
-                    }
-                    throw SSHSession.Failure.channel(SSHSession.lastError(session))
-                }
-            } while channel == nil
-            defer {
-                libssh2_channel_close(channel)
-                libssh2_channel_free(channel)
-            }
-
-            let ptyResult = "xterm-256color".withCString { term in
-                SSHSession.retry(session, sock) {
-                    libssh2_channel_request_pty_ex(channel, term, 14, nil, 0, initialCols, initialRows, 0, 0)
-                }
-            }
-            guard ptyResult == 0 else { throw SSHSession.Failure.channel("pty: \(SSHSession.lastError(session))") }
-
-            let command = "tmux new -A -s \(tmuxSession)"
-            guard SSHSession.retry(session, sock, {
-                libssh2_channel_process_startup(channel, "exec", 4, command, UInt32(command.utf8.count))
-            }) == 0 else {
-                throw SSHSession.Failure.channel("exec: \(SSHSession.lastError(session))")
-            }
-
-            try eventLoop(channel: channel!, session: session, sock: sock)
-            onClosed(nil)
-        } catch {
-            onClosed("\(error)")
+            guard isRunning() else { break }
+            backoff = min(max(1, backoff * 2), 5)   // 1, 2, 4, 5, 5…
+            interruptibleSleep(seconds: backoff)
         }
+    }
+
+    private func connectAndServe() throws {
+        let sock = try SSHSession.openSocket(host: host.hostName, port: host.port)
+        defer { close(sock) }
+
+        guard let session = libssh2_session_init_ex(nil, nil, nil, nil) else {
+            throw SSHSession.Failure.handshake("session init failed")
+        }
+        defer {
+            libssh2_session_disconnect_ex(session, SSH_DISCONNECT_BY_APPLICATION, "bye", "")
+            libssh2_session_free(session)
+        }
+        libssh2_session_set_blocking(session, 0)
+
+        guard SSHSession.retry(session, sock, { libssh2_session_handshake(session, sock) }) == 0 else {
+            throw SSHSession.Failure.handshake(SSHSession.lastError(session))
+        }
+        try SSHSession.verifyHostKey(session, host: host)
+        guard let agentSocketPath else {
+            throw SSHSession.Failure.authFailed("terminal session requires the agent")
+        }
+        try SSHSession.authenticateViaAgent(session, sock, socketPath: agentSocketPath, user: host.user)
+
+        var channel: OpaquePointer?
+        repeat {
+            channel = libssh2_channel_open_ex(session, "session", 7, 2 * 1024 * 1024, 32_768, nil, 0)
+            if channel == nil {
+                if libssh2_session_last_errno(session) == LIBSSH2_ERROR_EAGAIN {
+                    SSHSession.waitSocket(sock, session); continue
+                }
+                throw SSHSession.Failure.channel(SSHSession.lastError(session))
+            }
+        } while channel == nil
+        defer {
+            libssh2_channel_close(channel)
+            libssh2_channel_free(channel)
+        }
+
+        lock.lock(); let startCols = cols; let startRows = rows; lock.unlock()
+        let ptyResult = "xterm-256color".withCString { term in
+            SSHSession.retry(session, sock) {
+                libssh2_channel_request_pty_ex(channel, term, 14, nil, 0, startCols, startRows, 0, 0)
+            }
+        }
+        guard ptyResult == 0 else { throw SSHSession.Failure.channel("pty: \(SSHSession.lastError(session))") }
+
+        // -A attaches an existing session or creates one, so a reconnect brings the
+        // droplet's scrollback back; the app never replays it from memory.
+        let command = "tmux new -A -s \(tmuxSession)"
+        guard SSHSession.retry(session, sock, {
+            libssh2_channel_process_startup(channel, "exec", 4, command, UInt32(command.utf8.count))
+        }) == 0 else {
+            throw SSHSession.Failure.channel("exec: \(SSHSession.lastError(session))")
+        }
+
+        onState(.connected)
+        try eventLoop(channel: channel!, session: session, sock: sock)
     }
 
     private func eventLoop(channel: OpaquePointer, session: OpaquePointer, sock: Int32) throws {
@@ -185,10 +217,10 @@ public final class SSHTerminalSession: @unchecked Sendable, PaneBackend {
                 broadcaster.broadcast(PaneChunk(pane: pane, bytes: bytes))
                 progressed = true
             } else if n < 0 && n != LIBSSH2_ERROR_EAGAIN {
-                break
+                throw SSHSession.Failure.channel("read \(n)")   // dropped connection → reconnect
             }
 
-            if libssh2_channel_eof(channel) == 1 { break }
+            if libssh2_channel_eof(channel) == 1 { break }      // clean detach
             if !progressed { waitForActivity(sock: sock, session: session) }
         }
     }
@@ -206,11 +238,20 @@ public final class SSHTerminalSession: @unchecked Sendable, PaneBackend {
         if fds[0].events == 0 { fds[0].events = Int16(POLLIN) }
 
         _ = poll(&fds, 2, 5_000)
+        drainWake(fds[1].revents)
+    }
 
-        if fds[1].revents != 0 {   // drain the wake pipe
-            var scratch = [UInt8](repeating: 0, count: 64)
-            while read(wakePipe[0], &scratch, scratch.count) > 0 {}
-        }
+    /// Sleep up to `seconds`, but return early if stop()/send wakes the pipe.
+    private func interruptibleSleep(seconds: Int32) {
+        var fd = pollfd(fd: wakePipe[0], events: Int16(POLLIN), revents: 0)
+        _ = poll(&fd, 1, seconds * 1_000)
+        drainWake(fd.revents)
+    }
+
+    private func drainWake(_ revents: Int16) {
+        guard revents != 0 else { return }
+        var scratch = [UInt8](repeating: 0, count: 64)
+        while read(wakePipe[0], &scratch, scratch.count) > 0 {}
     }
 
     private func writeAll(_ channel: OpaquePointer, _ bytes: [UInt8], session: OpaquePointer, sock: Int32) {
