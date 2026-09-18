@@ -18,7 +18,7 @@ struct CommandPaletteView: View {
         ZStack {
             Color.black.opacity(0.5)
                 .ignoresSafeArea()
-                .onTapGesture { navigator.closePalette() }
+                .onTapGesture { run("palette.close") }
 
             VStack(spacing: 0) {
                 HStack(spacing: 10) {
@@ -63,12 +63,18 @@ struct CommandPaletteView: View {
         }
         .onAppear { fieldFocused = true }
         #if os(macOS)
-        .onExitCommand { navigator.closePalette() }
+        .onExitCommand { run("palette.close") }
         #endif
     }
 
     private func runFirst() {
         if let first = results.first { run(first) }
+    }
+
+    /// Chrome gestures (backdrop tap, Esc) invoke a Command too, so the audit log
+    /// sees every way the palette opens and closes.
+    private func run(_ id: String) {
+        Task { try? await registry.run(id) }
     }
 
     private func run(_ command: Command) {

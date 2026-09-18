@@ -43,6 +43,10 @@ struct LodiStudiosApp: App {
                     keywords: ["cmdk", "search", "jump", "run"]) { _ in
                 await MainActor.run { navigator.openPalette() }
             },
+            Command(id: "palette.close", title: "Close Command Palette",
+                    keywords: ["dismiss", "escape"]) { _ in
+                await MainActor.run { navigator.closePalette() }
+            },
             Command(id: "assistant.toggle", title: "Toggle Assistant",
                     subtitle: "The chat panel that drives every command",
                     keywords: ["chat", "ai", "open", "close"]) { _ in

@@ -65,7 +65,9 @@ struct AssistantPanelView: View {
                 .font(.headline)
                 .foregroundStyle(LodiTheme.text)
             Spacer()
-            Button { navigator.toggleAssistant() } label: {
+            Button {
+                Task { try? await registry.run("assistant.toggle") }
+            } label: {
                 Image(systemName: "xmark")
                     .foregroundStyle(LodiTheme.secondaryText)
             }
