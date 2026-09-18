@@ -7,7 +7,13 @@ with a sign callback through the `abstract` pointer; the key a non-extractable P
 signed with `SecKeyCreateSignature`, with the M5 change reduced to one attribute. The ECDSA
 fingerprints are the ones pinned. The Outgoing Connections entitlement is right for a sandboxed app.
 
-## The proof still owed
+## Proof — delivered (61e9008)
+Sessions' auth log, 2026-09-18 04:59:04 UTC: `Accepted publickey for root from 38.49.92.35 …
+ECDSA SHA256:lH2BtBgAl5Bgsa5CO7/vrdiisEjeU9XgSNPkJ1ZHlUg`. The app authenticated to a real host
+with its own non-extractable key over embedded libssh2. A preauth disconnect six minutes earlier
+was the first attempt; the second succeeded. Milestone 1 is closed.
+
+## The proof as it was specified
 `exec("uname -a")` against Sessions returning `7.0.0-27-generic`. The P-256 key is authorised
 there as of 2f70f1d; the ed25519 line is gone. Sessions' auth log will show
 `Accepted publickey for root … ECDSA SHA256:lH2BtBgAl5Bgsa5CO7/vrdiisEjeU9XgSNPkJ1ZHlUg`.
