@@ -67,8 +67,17 @@ struct RootView: View {
         case .board:
             BoardView(hosts: inventory.hosts)
         case .tool(let tool):
-            ToolPlaceholderView(tool: tool)
+            toolView(tool)
                 .lodiTool(tool)
+        }
+    }
+
+    @ViewBuilder private func toolView(_ tool: LodiTool) -> some View {
+        switch tool {
+        case .terminal:
+            LodiTerminalView()
+        default:
+            ToolPlaceholderView(tool: tool)
         }
     }
 

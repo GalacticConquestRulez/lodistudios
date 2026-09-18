@@ -48,9 +48,6 @@ struct LodiStudiosApp: App {
                 .task {
                     registerBaselineCommands()
                     ensureDeviceIdentity()
-                    // M1 proof: connect to Sessions and mirror the result. Doubles
-                    // as the Board's reachability probe once facts go live.
-                    try? await registry.run("net.sessionsUname")
                 }
         }
         #if os(macOS)

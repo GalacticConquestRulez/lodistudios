@@ -136,9 +136,11 @@ public final class SSHAgent: @unchecked Sendable {
     public init(keyStore: SSHKeyStore, comment: String, socketPath: String? = nil) {
         self.keyStore = keyStore
         self.comment = comment
-        // The container tmp dir keeps the path under AF_UNIX's 104-byte sun_path.
+        // The container tmp dir keeps the path under AF_UNIX's 104-byte sun_path;
+        // a unique suffix lets several agents coexist (e.g. a terminal and a probe).
         self.socketPath = socketPath
-            ?? FileManager.default.temporaryDirectory.appendingPathComponent("lodi-agent.sock").path
+            ?? FileManager.default.temporaryDirectory
+                .appendingPathComponent("lodi-agent-\(UUID().uuidString.prefix(8)).sock").path
     }
 
     public func start() throws {
