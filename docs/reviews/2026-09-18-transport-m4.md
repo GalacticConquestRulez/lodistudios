@@ -73,3 +73,19 @@ read it.
 Remaining from M4's list: tmux-restart detection, `PaneInput.bytes`. Then M5 (Secure Enclave —
 `kSecAttrTokenIDSecureEnclave` on the same data-protection-keychain path) and M6 (the onward
 hop: `auth_agent` requested and serviced on the terminal channel).
+
+---
+
+# dab9fbd — M4 close-out: all items done
+
+Keepalives configured at 15 s with reply, sent from the loop, the "seconds to next" driving the
+poll timeout so the loop wakes to send them; a failed keepalive throws into the reconnect path.
+tmux-restart detection via `tmux has-session` on a throwaway exec channel, only after a first
+successful connect, errors treated as "exists" so it never cries wolf. `PaneInput.bytes` added
+and used by the terminal view. Banner text stripped of its error prefix. All correct.
+
+One-word fix: the detach note says `Ctrl-b d`; Sessions' `~/.tmux.conf` (copied from the GF box)
+sets the prefix to **Ctrl-a**. Say `Ctrl-a d`, or better, "the tmux prefix + d".
+
+**M4 is closed on code. The proof — two minutes of Wi-Fi off, banner within ~30 s, reattach,
+a fresh login in Sessions' log — is the owner's to run on this build.** Then M5 and M6.
