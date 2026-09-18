@@ -50,3 +50,35 @@ did not swallow `SSH_AUTH_SOCK` for a non-interactive exec — `ssh-add -l` read
 sshd sets, which `rc` must not unset.
 
 Still pending from 2a: the four-field `session-bind` parse and `chmod 0600` on the socket.
+
+---
+
+# M2c — the forwarded channel: what libssh2 actually does (from its source, 1.11.1)
+
+The premise "libssh2's client API may not expose a clean way to accept the server-opened
+auth-agent channel" is **wrong**, and the vendored headers plus `src/packet.c` settle it:
+
+1. Register a callback of type **`LIBSSH2_CALLBACK_AUTHAGENT`** (value 7) with
+   `libssh2_session_callback_set2(session, LIBSSH2_CALLBACK_AUTHAGENT, cb)`. Signature
+   (`LIBSSH2_AUTHAGENT_FUNC`): `void cb(LIBSSH2_SESSION *, LIBSSH2_CHANNEL *, void **abstract)`.
+2. When the server opens `auth-agent@openssh.com`, `packet_authagent_open()` allocates the
+   channel, links it into the session, sends `CHANNEL_OPEN_CONFIRMATION` itself, and **hands the
+   channel to that callback**. Without the callback set it refuses the open — which is exactly
+   the "granted but not serviced" symptom seen.
+3. **The application services the channel.** libssh2 does not speak the agent protocol on it
+   for you. But the protocol logic already exists and is unit-tested: `SSHAgentResponder.handle`.
+   So: in the callback, append the channel to a list on the session context. In the existing
+   non-blocking read loop (`runExec`), after reading the exec channel, iterate the agent
+   channels: `libssh2_channel_read` (EAGAIN → skip), accumulate bytes per channel, split on the
+   4-byte length frame, `responder.handle(frame)` → `libssh2_channel_write` the reply; on EOF,
+   `libssh2_channel_free`. No Unix socket is involved on the forwarded path — the socket is only
+   for libssh2's *local* agent auth (M2b), which already works.
+4. Callbacks 8 and 9 (`AUTHAGENT_IDENTITIES`, `AUTHAGENT_SIGN`) exist in the header and are
+   stored by `session_callback_set2`, but are not what services a forwarded channel. Ignore them.
+
+Effort: about an hour, because the hard half (the responder) is done. **Cap it at one hour of
+build.** If `ssh-add -l` on Sessions does not list the key by then, commit what exists, note
+where it stopped, and go to M3 — forwarding is not needed until M6.
+
+Proof unchanged: `m2-agent.txt` shows `256 SHA256:lH2BtBgAl5Bgsa5CO7/vrdiisEjeU9XgSNPkJ1ZHlUg
+lodistudios@tanners-macbook-pro.local (ECDSA)`.
