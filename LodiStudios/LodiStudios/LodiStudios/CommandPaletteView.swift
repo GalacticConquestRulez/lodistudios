@@ -100,7 +100,7 @@ private struct CommandRow: View {
             Spacer(minLength: 12)
             if command.isDestructive {
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(LodiTheme.statusWarn)
             }
         }
         .padding(.horizontal, 16)

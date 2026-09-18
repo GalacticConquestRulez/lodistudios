@@ -14,6 +14,14 @@ public enum LodiPalette {
     /// Not in the logo. The site's pink, kept for exactly one job: the Assistant.
     /// It must never appear in a tool's working area or the sidebar.
     public static let pink   = Color(lodiHex: 0xFF4FA0)
+
+    /// Status is not brand. A separate, slightly desaturated trio — deliberately
+    /// none of the four primaries — so a red glow never reads as "you are in
+    /// Infrastructure Pro" (docs/ui-review.md, gap 4). Shape and word carry status
+    /// first; these only reinforce it, and only ever in content.
+    public static let statusOk   = Color(lodiHex: 0x3FB56B)
+    public static let statusWarn = Color(lodiHex: 0xE0A030)
+    public static let statusFail = Color(lodiHex: 0xD1524E)
 }
 
 /// The five tools that are one app. Each owns exactly one logo primary so colour
@@ -70,6 +78,12 @@ public enum LodiTheme {
 
     /// The one surface that crosses every tool. Pink lives here and nowhere else.
     public static let assistantAccent: Color = LodiPalette.pink
+
+    /// Status lives in content; tool accents live in chrome; never the same
+    /// colour. Pair these with a shape and a word (● ok, ▲ warn, ✕ fail).
+    public static let statusOk:   Color = LodiPalette.statusOk
+    public static let statusWarn: Color = LodiPalette.statusWarn
+    public static let statusFail: Color = LodiPalette.statusFail
 }
 
 // MARK: - Per-tool accent through the environment
