@@ -12,3 +12,6 @@ DerivedData/
 xcuserdata/
 *.xcscmblueprint
 *.xccheckout
+
+# libssh2 build tmp
+scripts/.build-libssh2/
