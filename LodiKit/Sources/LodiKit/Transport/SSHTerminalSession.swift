@@ -290,7 +290,7 @@ public final class SSHTerminalSession: @unchecked Sendable, PaneBackend {
 
             // Service any forwarded auth-agent channels (git push / ssh greenflash
             // inside tmux reaching this app's agent).
-            if AuthAgentForwarding.service(agentContext) { progressed = true }
+            if AuthAgentForwarding.service(agentContext, session: session, sock: sock) { progressed = true }
 
             let n = libssh2_channel_read_ex(channel, 0, &buffer, buffer.count)
             if n > 0 {

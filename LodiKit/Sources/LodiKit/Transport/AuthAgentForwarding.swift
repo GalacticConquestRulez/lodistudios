@@ -43,9 +43,11 @@ enum AuthAgentForwarding {
     }
 
     /// Pump each forwarded auth-agent channel: read bytes, split on the 4-byte
-    /// length frame, answer with the responder, write the reply, free on EOF.
-    /// Returns whether any bytes moved.
-    static func service(_ context: AuthAgentContext) -> Bool {
+    /// length frame, answer with the responder, write the reply, free on EOF or a
+    /// read error (never stop the caller's loop). Returns whether any bytes moved.
+    /// `session`/`sock` let `writeChannel` wait on EAGAIN instead of spinning — the
+    /// bug that wedged the terminal on a second hop (M6 review).
+    static func service(_ context: AuthAgentContext, session: OpaquePointer, sock: Int32) -> Bool {
         var progressed = false
         var readBuffer = [Int8](repeating: 0, count: 4096)
         var closed: [OpaquePointer] = []
@@ -59,12 +61,12 @@ enum AuthAgentForwarding {
                 }
                 while let frame = takeFrame(&pending) {
                     let reply = context.responder.handle(frame)
-                    writeChannel(channel, reply)
+                    writeChannel(channel, reply, session: session, sock: sock)
                 }
                 context.buffers[channel] = pending
                 progressed = true
             } else if n == 0 || (n < 0 && n != LIBSSH2_ERROR_EAGAIN) {
-                closed.append(channel)
+                closed.append(channel)   // EOF or error → close this channel only
             }
         }
 
@@ -89,15 +91,26 @@ enum AuthAgentForwarding {
         return body
     }
 
-    private static func writeChannel(_ channel: OpaquePointer, _ data: Data) {
+    private static func writeChannel(
+        _ channel: OpaquePointer, _ data: Data, session: OpaquePointer, sock: Int32
+    ) {
         data.withUnsafeBytes { raw in
             let base = raw.bindMemory(to: UInt8.self).baseAddress!
             var sent = 0
+            var stalls = 0
             while sent < raw.count {
                 let n = libssh2_channel_write_ex(channel, 0, base + sent, raw.count - sent)
-                if n == LIBSSH2_ERROR_EAGAIN { continue }
+                if n == LIBSSH2_ERROR_EAGAIN {
+                    // Wait on the socket rather than busy-spinning — spinning here
+                    // froze the whole event loop, PTY included, on a second hop.
+                    stalls += 1
+                    if stalls > 64 { break }   // bounded; agent replies are tiny
+                    SSHSession.waitSocket(sock, session)
+                    continue
+                }
                 if n <= 0 { break }
                 sent += Int(n)
+                stalls = 0
             }
         }
     }

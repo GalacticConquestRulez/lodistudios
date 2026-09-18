@@ -210,7 +210,7 @@ public actor SSHSession {
 
             // Service any forwarded auth-agent channels so a remote ssh-add can
             // reach our key while its exec command is still blocked.
-            if let context, AuthAgentForwarding.service(context) { progressed = true }
+            if let context, AuthAgentForwarding.service(context, session: session, sock: sock) { progressed = true }
 
             if libssh2_channel_eof(channel) == 1 && !progressed { break }
             if !progressed { waitSocket(sock, session) }
