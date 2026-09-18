@@ -36,3 +36,32 @@ commit; recorded so M6 does not rediscover it.
 
 Proof for the milestone stays: `cc -l` renders, keys echo without lag, `htop` draws, a second
 tab opens and the first keeps working.
+
+---
+
+# 23f380c — M3 (UI half): SwiftTerm wired
+
+**Verdict: the wiring is right — the view is one `PaneOutputSink`, output hops to the main
+thread, resize flows back, one renderer on both platforms, per-agent socket paths so a terminal
+and a probe can coexist.** Three things, in order of importance:
+
+1. **The transport fixes above are still not in** (`libssh2_exit` ×2, no self-pipe, session name
+   hardcoded). This commit landed before the review was pulled. Do them now, before the first
+   real typing session — the 5-second keystroke lag will be the first thing the owner notices.
+2. **Keystrokes bypass `PaneWriter`.** `send(source:data:)` calls `session.sendBytes` directly.
+   The session is already a `PaneBackend`, so this is one line: hold a
+   `PaneWriter(backend: session)` in the coordinator and `write(.text(...))` through it. The
+   whole point of the week-one seam is that there is exactly one door for input — a human's
+   keys and an agent's `send-keys` alike — with a policy in front. Don't let the first caller
+   walk around it.
+3. **The session dies with the view.** `TerminalModel` lives in `@State` on `LodiTerminalView`
+   and `onDisappear` stops the session, so switching to the Board and back disconnects and
+   reconnects. tmux makes that survivable, but M4 (reconnect as a non-event) and the Board
+   (sessions as first-class objects) both need sessions that outlive views: an app-level,
+   `@Observable` session store keyed by host/tab, injected like the registry; views attach and
+   detach *sinks*, never start or stop sessions. Do it as part of M4, not now — but don't build
+   more on the `@State` shape.
+
+Smaller: the terminal is hardcoded to the `sessions` host; fine for v0.1, the host list comes
+with tabs. `try? agent.start()` swallows a failure that would make every connection fail with
+a confusing auth error — surface it.
