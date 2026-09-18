@@ -39,6 +39,10 @@ public struct SSHKeyStore: Sendable {
             kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
             kSecAttrApplicationTag as String: tag,
             kSecReturnRef as String: true,
+            // The data-protection keychain scopes the key to the app's entitlement
+            // group, not a per-app ACL — so signing never prompts and survives the
+            // re-signing Xcode does on every debug build. Required for M5's Enclave.
+            kSecUseDataProtectionKeychain as String: true,
         ]
         var ref: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &ref)
@@ -51,6 +55,7 @@ public struct SSHKeyStore: Sendable {
         let attributes: [String: Any] = [
             kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
             kSecAttrKeySizeInBits as String: 256,
+            kSecUseDataProtectionKeychain as String: true,
             kSecPrivateKeyAttrs as String: [
                 kSecAttrIsPermanent as String: true,
                 kSecAttrApplicationTag as String: tag,
