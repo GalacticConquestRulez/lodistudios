@@ -391,11 +391,15 @@ symlinks the socket to a stable path, and set `SSH_AUTH_SOCK` to that path in
 
 ### Build order — smallest useful thing first
 
-- **v0.1, ~2 weeks — "I can stop opening Termius."** Host inventory; an
-  `ssh_config` rendered from it (golden-file tested, and the single place every
-  connection option is decided); ControlMaster lifecycle; one terminal tab per
-  host via **plain attach** (`ssh -t host 'tmux new -A -s <name>'`); the in-app agent; sleep/wake and network-change reconnect. That is genuinely
-  enough to switch, because tmux and OpenSSH already solve the hard parts.
+- **v0.1, ~2 weeks — "I can stop opening Termius."** Host inventory (the single
+  place every connection option is decided, golden-file tested as its own
+  serialization); the libssh2 core behind the `SSHTransport` seam, connecting
+  and opening a shell that runs `tmux new -A -s <name>`; the in-app agent for
+  authentication; one terminal tab per host; sleep/wake and network-change
+  reconnect. No `ssh_config`, no ControlMaster, no spawned `ssh` — those were
+  the first draft's subprocess design and are withdrawn (see "Libraries"). An
+  `ssh_config` *export* for the Mac's own Terminal and git is a fine small
+  feature, but it is an export, never something the app consumes.
 - **v0.2, +1 week** — SFTP browsing, transfers, drag and drop, from libssh2's
   own SFTP. The iOS build reaches v0.1 parity here: same core, same emulator,
   touch chrome.
