@@ -38,13 +38,15 @@ public final class HostInventory {
                 alias: "sessions",
                 hostName: "67.205.136.45",
                 role: "LodiStudios session droplet — tmux, Claude runs, push relay",
-                forwardAgent: true
+                forwardAgent: true,
+                hostKeyFingerprintSHA256: "SHA256:QSNdYT45PqF23pHNBeg92CL/Qj0XDfpYm9hZc/4CfJU"
             ),
             Host(
                 alias: "greenflash",
                 hostName: "10.116.0.2",
                 role: "client-facing: 17 sites, Green Flash Studio",
-                proxyJump: "sessions"
+                proxyJump: "sessions",
+                hostKeyFingerprintSHA256: "SHA256:O01ThyuNFaUU+3eGESaMK5hF4q1a6pkIyWtSGF9UtM4"
             ),
         ]
     }

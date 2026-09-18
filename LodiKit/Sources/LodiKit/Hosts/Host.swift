@@ -19,6 +19,10 @@ public struct Host: Identifiable, Sendable, Equatable, Codable {
     /// (the session droplet) should carry the agent; onward hops are reached
     /// through it, so keys never rest on a downstream box.
     public var forwardAgent: Bool
+    /// The pinned SSH host-key fingerprint (`SHA256:...`, base64, no padding —
+    /// exactly as `ssh-keygen -l` prints). The transport refuses to connect on a
+    /// mismatch; nil means "trust on first use, then pin" (docs/hosts.md).
+    public var hostKeyFingerprintSHA256: String?
 
     public var id: String { alias }
 
@@ -29,7 +33,8 @@ public struct Host: Identifiable, Sendable, Equatable, Codable {
         port: Int = 22,
         role: String? = nil,
         proxyJump: String? = nil,
-        forwardAgent: Bool = false
+        forwardAgent: Bool = false,
+        hostKeyFingerprintSHA256: String? = nil
     ) {
         self.alias = alias
         self.hostName = hostName
@@ -38,5 +43,6 @@ public struct Host: Identifiable, Sendable, Equatable, Codable {
         self.role = role
         self.proxyJump = proxyJump
         self.forwardAgent = forwardAgent
+        self.hostKeyFingerprintSHA256 = hostKeyFingerprintSHA256
     }
 }
