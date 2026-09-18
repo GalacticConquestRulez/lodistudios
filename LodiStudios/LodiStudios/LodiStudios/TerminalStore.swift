@@ -29,6 +29,7 @@ final class TerminalStore {
             host: host,
             keyStore: keyStore,
             agentSocketPath: agent.socketPath,
+            agentComment: LodiStudiosApp.keyComment,
             onState: { [weak self] state in
                 Task { @MainActor in self?.states[alias] = state }
             }

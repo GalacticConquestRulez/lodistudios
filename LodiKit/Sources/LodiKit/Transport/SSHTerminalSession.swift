@@ -31,6 +31,7 @@ public final class SSHTerminalSession: @unchecked Sendable, PaneBackend {
     private let keyStore: SSHKeyStore
     private let agentSocketPath: String?
     private let tmuxSession: String
+    private let agentComment: String
     private let onState: @Sendable (State) -> Void
 
     private let lock = NSLock()
@@ -52,6 +53,7 @@ public final class SSHTerminalSession: @unchecked Sendable, PaneBackend {
         keyStore: SSHKeyStore = SSHKeyStore(),
         agentSocketPath: String? = nil,
         tmuxSession: String? = nil,
+        agentComment: String = "lodistudios",
         cols: Int32 = 80,
         rows: Int32 = 24,
         onState: @escaping @Sendable (State) -> Void = { _ in }
@@ -60,6 +62,7 @@ public final class SSHTerminalSession: @unchecked Sendable, PaneBackend {
         self.keyStore = keyStore
         self.agentSocketPath = agentSocketPath
         self.tmuxSession = tmuxSession ?? "lodi-\(host.alias)"
+        self.agentComment = agentComment
         self.cols = cols
         self.rows = rows
         self.onState = onState
@@ -146,7 +149,17 @@ public final class SSHTerminalSession: @unchecked Sendable, PaneBackend {
         let sock = try SSHSession.openSocket(host: host.hostName, port: host.port)
         defer { close(sock) }
 
-        guard let session = libssh2_session_init_ex(nil, nil, nil, nil) else {
+        // The agent is forwarded into the tmux shell so `git push` / `ssh greenflash`
+        // inside the session reach this app's agent (M6). The context is reached
+        // from the auth-agent callback via the session abstract.
+        let agentContext = AuthAgentContext(responder: SSHAgentResponder(
+            publicKeyBlob: try keyStore.publicKeyBlob(),
+            comment: agentComment,
+            sign: { try self.keyStore.agentSignature($0) }
+        ))
+        let abstract = Unmanaged.passUnretained(agentContext).toOpaque()
+
+        guard let session = libssh2_session_init_ex(nil, nil, nil, abstract) else {
             throw SSHSession.Failure.handshake("session init failed")
         }
         defer {
@@ -154,6 +167,7 @@ public final class SSHTerminalSession: @unchecked Sendable, PaneBackend {
             libssh2_session_free(session)
         }
         libssh2_session_set_blocking(session, 0)
+        AuthAgentForwarding.registerCallback(on: session)
 
         guard SSHSession.retry(session, sock, { libssh2_session_handshake(session, sock) }) == 0 else {
             throw SSHSession.Failure.handshake(SSHSession.lastError(session))
@@ -189,6 +203,9 @@ public final class SSHTerminalSession: @unchecked Sendable, PaneBackend {
             libssh2_channel_free(channel)
         }
 
+        // Forward the agent for this channel so the remote shell can reach it.
+        _ = SSHSession.retry(session, sock) { libssh2_channel_request_auth_agent(channel) }
+
         lock.lock(); let startCols = cols; let startRows = rows; lock.unlock()
         let ptyResult = "xterm-256color".withCString { term in
             SSHSession.retry(session, sock) {
@@ -208,7 +225,8 @@ public final class SSHTerminalSession: @unchecked Sendable, PaneBackend {
 
         everConnected = true
         onState(.connected)
-        try eventLoop(channel: channel!, session: session, sock: sock)
+        try eventLoop(channel: channel!, session: session, sock: sock, agentContext: agentContext)
+        withExtendedLifetime(agentContext) {}
     }
 
     /// Exec `tmux has-session` on a throwaway channel; true if the session exists.
@@ -248,7 +266,9 @@ public final class SSHTerminalSession: @unchecked Sendable, PaneBackend {
         return channel
     }
 
-    private func eventLoop(channel: OpaquePointer, session: OpaquePointer, sock: Int32) throws {
+    private func eventLoop(
+        channel: OpaquePointer, session: OpaquePointer, sock: Int32, agentContext: AuthAgentContext
+    ) throws {
         var buffer = [Int8](repeating: 0, count: 32_768)
         while true {
             lock.lock()
@@ -267,6 +287,10 @@ public final class SSHTerminalSession: @unchecked Sendable, PaneBackend {
                 writeAll(channel, input, session: session, sock: sock)
                 progressed = true
             }
+
+            // Service any forwarded auth-agent channels (git push / ssh greenflash
+            // inside tmux reaching this app's agent).
+            if AuthAgentForwarding.service(agentContext) { progressed = true }
 
             let n = libssh2_channel_read_ex(channel, 0, &buffer, buffer.count)
             if n > 0 {
