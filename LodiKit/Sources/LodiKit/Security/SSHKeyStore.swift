@@ -104,6 +104,16 @@ public struct SSHKeyStore: Sendable {
         return try Self.sshSignatureBlob(fromDER: der)
     }
 
+    /// The full SSH signature for the agent protocol's SIGN_RESPONSE:
+    /// `string("ecdsa-sha2-nistp256") + string(mpint(r)||mpint(s))`. (libssh2's
+    /// publickey callback wants only the inner blob; the agent wire wants this.)
+    public func agentSignature(_ data: Data) throws -> Data {
+        var signature = Data()
+        signature.append(Self.sshString(Data("ecdsa-sha2-nistp256".utf8)))
+        signature.append(Self.sshString(try sign(data)))
+        return signature
+    }
+
     // MARK: - Pure SSH encodings (static so they are testable without the Keychain)
 
     /// An SSH `string`: 4-byte big-endian length, then the bytes.
