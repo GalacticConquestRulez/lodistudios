@@ -4,9 +4,13 @@ Read `docs/plan.md`, `docs/ui-review.md` and `docs/requests.md` before designing
 anything. They are the spec; a decision recorded there is not reopened without the owner.
 
 ## What this is
-A native SwiftUI app for one user (the owner) on macOS and iOS: LodiTerminal, WebPro, AppPro,
-Infrastructure Pro, LodiAdmin, plus the Board, the Run view, ⌘K and the Assistant. Completely
-separate from the Green Flash web studio; the two never share runtime code or servers.
+A native SwiftUI app for one user (the owner, Lodi) on macOS and iOS: LodiTerminal, WebPro,
+AppPro, Infrastructure Pro, LodiAdmin, plus the Board, the Run view, ⌘K and the Assistant.
+The downloaded, super-powered, personal version. Its sibling, Green Flash Studio, is the web
+version on the Green Flash droplet and is intended to be licensed to others. Both droplets run
+their own Claude Code — the GF one for the studio's clients and licensees, the LodiStudios
+session droplet for the owner alone. They never share credentials, sessions, runtime code or
+servers.
 
 ## Rules the owner has set
 - **Models:** Opus, Sonnet or Haiku for all work, including subagents (pass `model` explicitly).

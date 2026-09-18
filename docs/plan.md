@@ -367,7 +367,11 @@ sessions persist in the cloud, the phone only attaches.
 So LodiStudios gets a **session droplet of its own**: tmux sessions, the
 Claude Code runs the app drives (from the phone there is no Mac to run them
 on, so they run here), and the onward SSH hops to the Green Flash droplet and
-to client servers. The Mac keeps the jobs only a Mac can do — Xcode, Gradle,
+to client servers. Both droplets run Claude Code — the owner's words: *"both
+servers should have Claude access. Just one is web based and intended to
+license, the other is a downloaded super powered app version just for me."*
+The Green Flash droplet's runner serves the studio's clients and, later, its
+licensees; this one serves the owner alone. Separate credentials on each. The Mac keeps the jobs only a Mac can do — Xcode, Gradle,
 the app itself.
 
 This also dissolves the plan's largest security worry. The forwarded agent
