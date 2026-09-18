@@ -7,6 +7,9 @@ public enum PaneInput: Sendable, Equatable {
     case text(String)
     /// A tmux `send-keys` token, e.g. "Enter", "C-c".
     case keys(String)
+    /// Raw bytes — keystrokes from a terminal view, which are not always valid
+    /// UTF-8 (control sequences, paste) and must not round-trip through String.
+    case bytes([UInt8])
 }
 
 public enum PaneWriteDecision: Sendable, Equatable {

@@ -10,7 +10,12 @@ import CLibSSH2
 /// The dedicated loop reconnects on its own: when the channel ends (a tmux detach,
 /// a dropped network), it reports `.disconnected` and retries with backoff, then
 /// re-runs `tmux new -A -s <name>` so scrollback comes back from the droplet, never
-/// from the app's memory. A self-pipe in the poll set keeps keystrokes lag-free.
+/// from the app's memory. Keepalives make a *dead* link surface within ~30 s
+/// instead of only when a write fails. A self-pipe keeps keystrokes lag-free.
+///
+/// Note: because any disconnect reattaches, a deliberate tmux detach (Ctrl-b d)
+/// reattaches within a second — leaving the session is done by closing the tab,
+/// not by detaching from inside it.
 public final class SSHTerminalSession: @unchecked Sendable, PaneBackend {
     public enum State: Sendable, Equatable {
         case connecting
@@ -35,6 +40,9 @@ public final class SSHTerminalSession: @unchecked Sendable, PaneBackend {
     private var rows: Int32
     private var running = true
     private var started = false
+    /// True once we've connected at least once — so a missing tmux session on a
+    /// later attach can be reported as "gone" rather than a normal first attach.
+    private var everConnected = false
 
     /// Self-pipe: [read, write]. Writing a byte wakes the poll in the loop.
     private var wakePipe: [Int32] = [-1, -1]
@@ -94,8 +102,9 @@ public final class SSHTerminalSession: @unchecked Sendable, PaneBackend {
     // PaneBackend seam — so a PaneWriter policy can gate input.
     public func send(_ input: PaneInput, to pane: PaneID) {
         switch input {
-        case .text(let text): sendBytes(Array(text.utf8))
-        case .keys(let keys): sendBytes(Array(keys.utf8))
+        case .text(let text):  sendBytes(Array(text.utf8))
+        case .keys(let keys):  sendBytes(Array(keys.utf8))
+        case .bytes(let bytes): sendBytes(bytes)
         }
     }
 
@@ -149,11 +158,21 @@ public final class SSHTerminalSession: @unchecked Sendable, PaneBackend {
         guard SSHSession.retry(session, sock, { libssh2_session_handshake(session, sock) }) == 0 else {
             throw SSHSession.Failure.handshake(SSHSession.lastError(session))
         }
+        // Ask the server for a keepalive every 15s (want_reply), so a dead link
+        // errors a send within ~30s rather than hanging until the next write.
+        libssh2_keepalive_config(session, 1, 15)
+
         try SSHSession.verifyHostKey(session, host: host)
         guard let agentSocketPath else {
             throw SSHSession.Failure.authFailed("terminal session requires the agent")
         }
         try SSHSession.authenticateViaAgent(session, sock, socketPath: agentSocketPath, user: host.user)
+
+        // On a reconnect, if the tmux session is gone the server restarted; say so
+        // once rather than silently showing a fresh empty pane (spec + M4 review).
+        if everConnected, !hasSession(named: tmuxSession, session: session, sock: sock) {
+            onState(.disconnected(reason: "tmux session '\(tmuxSession)' is gone — previous output not available"))
+        }
 
         var channel: OpaquePointer?
         repeat {
@@ -187,8 +206,46 @@ public final class SSHTerminalSession: @unchecked Sendable, PaneBackend {
             throw SSHSession.Failure.channel("exec: \(SSHSession.lastError(session))")
         }
 
+        everConnected = true
         onState(.connected)
         try eventLoop(channel: channel!, session: session, sock: sock)
+    }
+
+    /// Exec `tmux has-session` on a throwaway channel; true if the session exists.
+    /// Errors are treated as "exists" so we never cry wolf about lost scrollback.
+    private func hasSession(named name: String, session: OpaquePointer, sock: Int32) -> Bool {
+        guard let channel = openChannel(session, sock) else { return true }
+        defer {
+            libssh2_channel_close(channel)
+            libssh2_channel_free(channel)
+        }
+        let command = "tmux has-session -t \(name) 2>/dev/null"
+        guard SSHSession.retry(session, sock, {
+            libssh2_channel_process_startup(channel, "exec", 4, command, UInt32(command.utf8.count))
+        }) == 0 else { return true }
+
+        var buffer = [Int8](repeating: 0, count: 1024)
+        while true {
+            let n = libssh2_channel_read_ex(channel, 0, &buffer, buffer.count)
+            if n == LIBSSH2_ERROR_EAGAIN { SSHSession.waitSocket(sock, session); continue }
+            if n <= 0 { break }
+        }
+        _ = SSHSession.retry(session, sock) { libssh2_channel_close(channel) }
+        return libssh2_channel_get_exit_status(channel) == 0
+    }
+
+    private func openChannel(_ session: OpaquePointer, _ sock: Int32) -> OpaquePointer? {
+        var channel: OpaquePointer?
+        repeat {
+            channel = libssh2_channel_open_ex(session, "session", 7, 2 * 1024 * 1024, 32_768, nil, 0)
+            if channel == nil {
+                if libssh2_session_last_errno(session) == LIBSSH2_ERROR_EAGAIN {
+                    SSHSession.waitSocket(sock, session); continue
+                }
+                return nil
+            }
+        } while channel == nil
+        return channel
     }
 
     private func eventLoop(channel: OpaquePointer, session: OpaquePointer, sock: Int32) throws {
@@ -221,13 +278,22 @@ public final class SSHTerminalSession: @unchecked Sendable, PaneBackend {
             }
 
             if libssh2_channel_eof(channel) == 1 { break }      // clean detach
-            if !progressed { waitForActivity(sock: sock, session: session) }
+
+            // Send a keepalive if one is due; a dead link errors here → reconnect.
+            // Its "seconds to next" becomes the poll timeout so we wake to send it.
+            var secondsToNext: Int32 = 15
+            if libssh2_keepalive_send(session, &secondsToNext) != 0 {
+                throw SSHSession.Failure.channel("keepalive failed — link dead")
+            }
+            if !progressed {
+                waitForActivity(sock: sock, session: session, timeoutSeconds: max(1, secondsToNext))
+            }
         }
     }
 
     /// Wait on both the ssh socket (per libssh2's block directions) and the wake
     /// pipe, so queued input is written the instant it arrives, not after a timeout.
-    private func waitForActivity(sock: Int32, session: OpaquePointer) {
+    private func waitForActivity(sock: Int32, session: OpaquePointer, timeoutSeconds: Int32) {
         var fds = [
             pollfd(fd: sock, events: 0, revents: 0),
             pollfd(fd: wakePipe[0], events: Int16(POLLIN), revents: 0),
@@ -237,7 +303,7 @@ public final class SSHTerminalSession: @unchecked Sendable, PaneBackend {
         if directions & LIBSSH2_SESSION_BLOCK_OUTBOUND != 0 { fds[0].events |= Int16(POLLOUT) }
         if fds[0].events == 0 { fds[0].events = Int16(POLLIN) }
 
-        _ = poll(&fds, 2, 5_000)
+        _ = poll(&fds, 2, timeoutSeconds * 1_000)
         drainWake(fds[1].revents)
     }
 

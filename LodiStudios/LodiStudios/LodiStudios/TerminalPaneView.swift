@@ -44,7 +44,7 @@ struct TerminalPaneView {
 
         // TerminalViewDelegate
         func send(source: TerminalView, data: ArraySlice<UInt8>) {
-            _ = writer.write(.text(String(decoding: data, as: UTF8.self)), to: session.pane)
+            _ = writer.write(.bytes(Array(data)), to: session.pane)
         }
         func sizeChanged(source: TerminalView, newCols: Int, newRows: Int) {
             session.resize(cols: Int32(newCols), rows: Int32(newRows))

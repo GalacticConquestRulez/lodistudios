@@ -38,10 +38,18 @@ struct LodiTerminalView: View {
         case .disconnected(let reason):
             ReconnectBanner(
                 symbol: "▲",
-                text: "Disconnected — reconnecting…" + (reason.map { " (\($0))" } ?? ""),
+                text: "Reconnecting…" + (cleaned(reason).map { " \($0)" } ?? ""),
                 tint: LodiTheme.statusWarn
             )
         }
+    }
+
+    /// Strip a `handshake:`/`socket:`/`channel:` prefix for the banner; the full
+    /// reason stays in the state for the log.
+    private func cleaned(_ reason: String?) -> String? {
+        guard let reason, !reason.isEmpty else { return nil }
+        if let range = reason.range(of: ": ") { return String(reason[range.upperBound...]) }
+        return reason
     }
 }
 
