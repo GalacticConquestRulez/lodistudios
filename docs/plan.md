@@ -445,6 +445,26 @@ Also cheap now and invaluable later: a second *headless* SwiftTerm per pane
 whose only job is to strip escape sequences into clean text. An LLM should never
 be shown raw VT100.
 
+### Before the developer account: what proceeds, what waits
+
+The owner starts on Xcode's free personal team and buys the Developer Program
+when push is needed. That changes sequencing, not scope.
+
+**Proceeds now, no paid entitlement involved:** the whole Mac app (a locally
+signed Mac build runs on the owner's Mac indefinitely); the iPhone build on a
+real device through 7-day free provisioning, re-deployed from Xcode weekly
+(three apps per device), with the Simulator unlimited; everything in LodiKit —
+libssh2 core, in-app agent, Secure Enclave keys, SFTP, tmux attach,
+CommandRegistry, the Assistant, the Board, ⌘K, SwiftTerm.
+
+**Waits for the account:** APNs push (so the push relay, Live Activities by
+push, droplet-originated notifications), CloudKit sync, associated domains,
+App Groups (widgets and extensions need them to share data with the app),
+TestFlight. Buy it a week before push is wanted — approval can take days.
+
+So v0.1 ships without the push relay, and the relay is the first thing built
+the day the account clears.
+
 ### Platform power, by priority
 
 Full list in `/root/LodiStudios-ui-review.md` ("Platform power"). The order of

@@ -40,7 +40,8 @@ servers.
 
 ## Build order
 v0.1 terminal + Board (read-only) + ⌘K + CommandRegistry + Assistant (navigate, invoke, log
-requests) + push relay. Then v0.2 SFTP / iOS parity / Live Activities / widgets, v0.3 control
+requests); the push relay joins the day the Apple Developer account clears (free personal team
+until then — see docs/plan.md, "Before the developer account"). Then v0.2 SFTP / iOS parity / Live Activities / widgets, v0.3 control
 mode / FileProvider / on-device routing, v0.4 editing / constraints UI / Mosh.
 
 ## Verification
