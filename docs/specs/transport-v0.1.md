@@ -19,7 +19,8 @@ keep the script so it can be rebuilt. Expose it to Swift through a C module (`CL
 `SSHSession` (an actor) owning one `LIBSSH2_SESSION` in **non-blocking mode** from the first
 call (`libssh2_session_set_blocking(s, 0)`; drive with `libssh2_session_block_directions()`
 and a socket wait — issue #535 is why). Handshake → host key check against a known-hosts store
-(pin by fingerprint; refuse on mismatch; first-connect prompt via a Command so the Assistant can
+(pin the **ECDSA** fingerprint from docs/hosts.md — the mbedTLS backend cannot verify ed25519
+host keys, so that is the type it will negotiate; refuse on mismatch; first-connect prompt via a Command so the Assistant can
 answer it) → `libssh2_userauth_publickey()` with a **sign callback**.
 
 **Key type: ECDSA P-256 (`ecdsa-sha2-nistp256`), not ed25519.** Verified in the 1.11.1 source
