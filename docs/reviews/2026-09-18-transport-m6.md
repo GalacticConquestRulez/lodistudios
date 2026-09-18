@@ -51,3 +51,16 @@ the prompt keeps echoing. One success is not enough; the first one already passe
 tmux env setting), which is why the owner's own attempt was refused at once. Sessions'
 `~/.bashrc` now exports `SSH_AUTH_SOCK=$HOME/.ssh/agent.sock` whenever that socket exists, so
 every shell — including old panes on their next `source`/login — reaches the forwarded agent.
+
+---
+
+**M6 proven by the owner, 2026-09-18 18:53.** After restarting the app (Sessions login 18:53:34
+with the Enclave key), in the app's own tmux pane: `ssh greenflash hostname` →
+`ubuntu-s-2vcpu-4gb-amd-nyc1`. greenflash's log: `18:53:46 Accepted publickey for root from
+10.116.0.6 … SHA256:48ov0n3CH6…`. The forwarded agent answers again after the restart.
+
+**v0.1 transport M0–M6: complete and proven.** One fix still owed before it is trusted daily:
+the `writeChannel` EAGAIN spin that wedged the loop on the second hop (above), then the
+three-hops-in-a-row regression test. After that: the trust-direction cleanup on the hosts
+to-do list, and v0.1 close-out — the Board's `HostFacts` provider goes SSH-backed over the
+same transport.
