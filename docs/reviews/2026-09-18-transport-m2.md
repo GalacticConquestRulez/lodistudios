@@ -25,3 +25,28 @@ starts from wrong data and nobody notices until a constraint fails to bind.
 M2b next: `libssh2_agent_set_identity_path(socketPath)`, authenticate through the agent instead
 of the callback, then `libssh2_channel_request_auth_agent` on a shell channel and prove it —
 `ssh-add -l` on Sessions listing the Mac's P-256 key.
+
+---
+
+# Review — 146b2b4, milestone 2b: authentication through the agent, forwarding requested
+
+**Verdict: correct.** `libssh2_agent_init` → `set_identity_path` (our socket) → `connect` →
+`list_identities` → `agent_userauth` per identity, all through the non-blocking retry; the
+private key never enters libssh2. `libssh2_channel_request_auth_agent` on the exec channel
+before the command, best-effort. The proof command runs `uname -a` and then `ssh-add -l` with
+forwarding on, writing both results to Application Support.
+
+**Seen from Sessions:** two logins through the agent path at 05:26:13 and 05:26:14
+(`ECDSA SHA256:lH2Bt…`) — the uname run and the ssh-add run. A `signature algorithm ssh-rsa not
+in PubkeyAcceptedAlgorithms` line at 05:26:01 is **not** the app: it came from 139.19.117.131,
+an internet scanner. Ignore it.
+
+**Proof still owed for M2c (forwarding):** the contents of `m2-agent.txt` — `ssh-add -l` on
+Sessions must list the Mac's key (`256 SHA256:lH2BtBgAl5Bgsa5CO7/vrdiisEjeU9XgSNPkJ1ZHlUg
+lodistudios@tanners-macbook-pro.local (ECDSA)`). If it says "Could not open a connection to
+your authentication agent", the forwarded channel was never accepted: check that
+`request_auth_agent` returned 0 and that Sessions' `~/.ssh/rc` (which re-points `agent.sock`)
+did not swallow `SSH_AUTH_SOCK` for a non-interactive exec — `ssh-add -l` reads the env var
+sshd sets, which `rc` must not unset.
+
+Still pending from 2a: the four-field `session-bind` parse and `chmod 0600` on the socket.
