@@ -82,3 +82,27 @@ where it stopped, and go to M3 — forwarding is not needed until M6.
 
 Proof unchanged: `m2-agent.txt` shows `256 SHA256:lH2BtBgAl5Bgsa5CO7/vrdiisEjeU9XgSNPkJ1ZHlUg
 lodistudios@tanners-macbook-pro.local (ECDSA)`.
+
+---
+
+# ad926ec — M2c proven; milestone 2 closed
+
+The servicing loop is exactly the shape above: `LIBSSH2_CALLBACK_AUTHAGENT` registered through
+`callback_set2`, an `AuthAgentContext` carrying the same `SSHAgentResponder`, frames split on
+the 4-byte length, replies written with `channel_write_ex`, channel freed on EOF, the exec loop
+breaking only when the exec channel is at EOF *and* no agent channel made progress. The 2a
+items landed in the same commit: four-field `session-bind` parse (session id is the second
+field), `chmod 0600` on the socket, tests updated.
+
+**Independent evidence from Sessions, 2026-09-18 05:47:** `~/.ssh/agent.sock ->
+/root/.ssh/agent/s.PZd5FueH0G.sshd.avONgxxO6H`. OpenSSH 10 keeps forwarded agent sockets under
+`~/.ssh/agent/`, and `~/.ssh/rc` re-points that symlink only when sshd accepted agent forwarding
+for the login — the 05:47:06 session, which is the `ssh-add -l` run. Together with the commit's
+reported output, the security design is now fact: a key that exists only on the Mac authorised
+an agent request that arrived from Sessions.
+
+**Closed:** M0, M1, M2. **Next:** M3, the terminal — PTY + `tmux new -A -s <name>`, channel
+reads into `PaneOutputBroadcaster`, a `PaneBackend` behind `PaneWriter`, SwiftTerm as one sink,
+resize through `libssh2_channel_request_pty_size`. The I/O loop moves to its own thread (see
+the M1 notes); `libssh2_init` becomes once per process. The SwiftTerm package must be added in
+Xcode by the owner first.
