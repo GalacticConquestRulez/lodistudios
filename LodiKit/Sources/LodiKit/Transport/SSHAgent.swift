@@ -47,7 +47,7 @@ struct SSHWireReader {
 
 /// The pure protocol logic: request payload in, response payload out. No sockets,
 /// so it is fully unit-testable with a fake signer.
-public struct SSHAgentResponder {
+public struct SSHAgentResponder: Sendable {
     public let publicKeyBlob: Data
     public let comment: String
     public let sign: @Sendable (Data) throws -> Data
@@ -89,8 +89,14 @@ public struct SSHAgentResponder {
 
         case SSHAgentProtocol.extensionRequest:
             guard let ext = reader.string() else { return payload([SSHAgentProtocol.failure]) }
+            // session-bind@openssh.com carries four fields in this order (OpenSSH
+            // PROTOCOL.agent): string hostkey, string session-id, string signature,
+            // bool is_forwarding. Record the session id — the second field.
             if String(decoding: ext, as: UTF8.self) == "session-bind@openssh.com",
-               let sessionID = reader.string() {
+               reader.string() != nil,                 // hostkey
+               let sessionID = reader.string(),         // session identifier
+               reader.string() != nil,                  // signature
+               reader.byte() != nil {                   // is_forwarding
                 boundSessions.append(sessionID)
                 return payload([SSHAgentProtocol.success])
             }
@@ -177,6 +183,7 @@ public final class SSHAgent: @unchecked Sendable {
             $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { bind(fd, $0, size) }
         }
         guard bound == 0 else { close(fd); throw AgentError.socket("bind \(errno)") }
+        chmod(path, 0o600)   // the socket signs with the device key; keep it private
         guard listen(fd, 8) == 0 else { close(fd); throw AgentError.socket("listen \(errno)") }
         return fd
     }

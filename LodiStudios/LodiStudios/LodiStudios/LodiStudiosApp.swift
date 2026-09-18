@@ -111,7 +111,7 @@ struct LodiStudiosApp: App {
                 do {
                     try agent.start()
                     defer { agent.stop() }
-                    let session = SSHSession(host: sessions, agentSocketPath: agent.socketPath)
+                    let session = SSHSession(host: sessions, agentSocketPath: agent.socketPath, agentComment: Self.keyComment)
                     // M2b: authenticate through the agent.
                     let uname = try await session.run("uname -a")
                     lodiWriteAppSupport("m2-uname.txt", "OK exit=\(uname.exitStatus)\n\(uname.stdout)")

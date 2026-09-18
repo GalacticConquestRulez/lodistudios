@@ -60,9 +60,10 @@ struct SSHAgentTests {
         let sessionID = Data([0xAB, 0xCD])
         var request = Data([27])                            // EXTENSION
         request += sshString(Data("session-bind@openssh.com".utf8))
-        request += sshString(sessionID)
-        request += sshString(Data("hostkey-sig".utf8))
-        request += Data([0])                                // is_forwarding
+        request += sshString(Data("hostkey-bytes".utf8))    // hostkey (1st field)
+        request += sshString(sessionID)                     // session id (2nd field)
+        request += sshString(Data("hostkey-sig".utf8))      // signature (3rd field)
+        request += Data([0])                                // is_forwarding (4th)
         #expect(Array(agent.handle(request).dropFirst(4)) == [6])  // SUCCESS
         #expect(agent.boundSessions == [sessionID])
     }

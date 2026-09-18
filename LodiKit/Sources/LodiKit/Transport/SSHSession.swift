@@ -36,6 +36,30 @@ private func lodiSignCallback(
     }
 }
 
+/// Holds the forwarded auth-agent channels the server opens plus the responder
+/// that answers them, reached from the C callback via the session abstract.
+private final class AuthAgentContext {
+    var responder: SSHAgentResponder
+    var channels: [OpaquePointer] = []
+    var buffers: [OpaquePointer: [UInt8]] = [:]
+    init(responder: SSHAgentResponder) { self.responder = responder }
+}
+
+/// LIBSSH2_CALLBACK_AUTHAGENT: the server opened an `auth-agent@openssh.com`
+/// channel (libssh2 has already confirmed it). Record it; the read loop services
+/// it with the same SSHAgentResponder the Unix socket uses (docs/reviews/
+/// 2026-09-18-transport-m2.md). No socket is involved on the forwarded path.
+private func lodiAuthAgentCallback(
+    _ session: OpaquePointer?,
+    _ channel: OpaquePointer?,
+    _ abstract: UnsafeMutablePointer<UnsafeMutableRawPointer?>?
+) {
+    guard let channel, let ctxPtr = abstract?.pointee else { return }
+    let context = Unmanaged<AuthAgentContext>.fromOpaque(ctxPtr).takeUnretainedValue()
+    context.channels.append(channel)
+    context.buffers[channel] = []
+}
+
 /// One SSH connection to a host, over embedded libssh2 with the app as its own
 /// signer (docs/specs/transport-v0.1.md, milestone 1). The session is non-blocking
 /// from the first call and driven with a socket wait. v0.1 proves connect + auth +
@@ -76,11 +100,19 @@ public actor SSHSession {
     /// When set, authenticate through the in-app agent at this Unix-socket path
     /// (milestone 2) instead of the direct sign callback (milestone 1).
     private let agentSocketPath: String?
+    /// The comment reported for forwarded-agent identities (what `ssh-add -l` shows).
+    private let agentComment: String
 
-    public init(host: Host, keyStore: SSHKeyStore = SSHKeyStore(), agentSocketPath: String? = nil) {
+    public init(
+        host: Host,
+        keyStore: SSHKeyStore = SSHKeyStore(),
+        agentSocketPath: String? = nil,
+        agentComment: String = "lodistudios"
+    ) {
         self.host = host
         self.keyStore = keyStore
         self.agentSocketPath = agentSocketPath
+        self.agentComment = agentComment
     }
 
     /// Connect, verify the host key, authenticate, run `command`, return its stdout.
@@ -89,7 +121,8 @@ public actor SSHSession {
     public func run(_ command: String, forwardAgent: Bool = false) throws -> Output {
         try Self.execute(
             command, host: host, keyStore: keyStore,
-            agentSocketPath: agentSocketPath, forwardAgent: forwardAgent
+            agentSocketPath: agentSocketPath, agentComment: agentComment,
+            forwardAgent: forwardAgent
         )
     }
 
@@ -97,7 +130,7 @@ public actor SSHSession {
 
     private nonisolated static func execute(
         _ command: String, host: Host, keyStore: SSHKeyStore,
-        agentSocketPath: String?, forwardAgent: Bool
+        agentSocketPath: String?, agentComment: String, forwardAgent: Bool
     ) throws -> Output {
         _ = libssh2_init(0)
         defer { libssh2_exit() }
@@ -105,7 +138,17 @@ public actor SSHSession {
         let sock = try openSocket(host: host.hostName, port: host.port)
         defer { close(sock) }
 
-        guard let session = libssh2_session_init_ex(nil, nil, nil, nil) else {
+        // For forwarding, a context (reached via the session abstract) collects the
+        // forwarded auth-agent channels and answers them with the same responder.
+        let context: AuthAgentContext? = forwardAgent
+            ? AuthAgentContext(responder: SSHAgentResponder(
+                publicKeyBlob: try keyStore.publicKeyBlob(),
+                comment: agentComment,
+                sign: { try keyStore.agentSignature($0) }))
+            : nil
+        let abstract = context.map { Unmanaged.passUnretained($0).toOpaque() }
+
+        guard let session = libssh2_session_init_ex(nil, nil, nil, abstract) else {
             throw Failure.handshake("session init failed")
         }
         defer {
@@ -113,6 +156,16 @@ public actor SSHSession {
             libssh2_session_free(session)
         }
         libssh2_session_set_blocking(session, 0)
+
+        if forwardAgent {
+            // Register the auth-agent callback so libssh2 confirms and hands us the
+            // server-opened forwarded channels instead of refusing them.
+            let typed: @convention(c) (
+                OpaquePointer?, OpaquePointer?, UnsafeMutablePointer<UnsafeMutableRawPointer?>?
+            ) -> Void = lodiAuthAgentCallback
+            let generic = unsafeBitCast(typed, to: (@convention(c) () -> Void).self)
+            libssh2_session_callback_set2(session, LIBSSH2_CALLBACK_AUTHAGENT, generic)
+        }
 
         let rc = retry(session, sock) { libssh2_session_handshake(session, sock) }
         guard rc == 0 else { throw Failure.handshake(lastError(session)) }
@@ -124,11 +177,17 @@ public actor SSHSession {
             try authenticate(session, sock, host: host, keyStore: keyStore)
         }
 
-        return try runExec(command, session: session, sock: sock, forwardAgent: forwardAgent)
+        let output = try runExec(
+            command, session: session, sock: sock,
+            forwardAgent: forwardAgent, context: context
+        )
+        withExtendedLifetime(context) {}
+        return output
     }
 
     private nonisolated static func runExec(
-        _ command: String, session: OpaquePointer, sock: Int32, forwardAgent: Bool
+        _ command: String, session: OpaquePointer, sock: Int32,
+        forwardAgent: Bool, context: AuthAgentContext?
     ) throws -> Output {
         var channel: OpaquePointer?
         repeat {
@@ -160,21 +219,89 @@ public actor SSHSession {
         var stdout = Data()
         var buffer = [Int8](repeating: 0, count: 32_768)
         while true {
+            var progressed = false
+
             let n = libssh2_channel_read_ex(channel, 0, &buffer, buffer.count)
             if n > 0 {
                 buffer.withUnsafeBytes {
                     stdout.append($0.bindMemory(to: UInt8.self).baseAddress!, count: n)
                 }
-            } else if n == LIBSSH2_ERROR_EAGAIN {
-                waitSocket(sock, session)
-            } else {
-                break   // 0 = EOF, <0 = done/error
+                progressed = true
+            } else if n < 0 && n != LIBSSH2_ERROR_EAGAIN {
+                break   // real read error
             }
+
+            // Service any forwarded auth-agent channels so a remote ssh-add can
+            // reach our key while its exec command is still blocked.
+            if let context, serviceAgentChannels(context) { progressed = true }
+
+            if libssh2_channel_eof(channel) == 1 && !progressed { break }
+            if !progressed { waitSocket(sock, session) }
         }
 
         _ = retry(session, sock) { libssh2_channel_close(channel) }
         let exitStatus = libssh2_channel_get_exit_status(channel)
         return Output(stdout: String(decoding: stdout, as: UTF8.self), exitStatus: exitStatus)
+    }
+
+    /// Pump each forwarded auth-agent channel: read bytes, split on the 4-byte
+    /// length frame, answer with the responder, write the reply, free on EOF.
+    /// Returns whether any bytes moved.
+    private nonisolated static func serviceAgentChannels(_ context: AuthAgentContext) -> Bool {
+        var progressed = false
+        var readBuffer = [Int8](repeating: 0, count: 4096)
+        var closed: [OpaquePointer] = []
+
+        for channel in context.channels {
+            let n = libssh2_channel_read_ex(channel, 0, &readBuffer, readBuffer.count)
+            if n > 0 {
+                var pending = context.buffers[channel] ?? []
+                readBuffer.withUnsafeBytes {
+                    pending.append(contentsOf: $0.bindMemory(to: UInt8.self).prefix(n))
+                }
+                while let frame = takeFrame(&pending) {
+                    let reply = context.responder.handle(frame)
+                    writeChannel(channel, reply)
+                }
+                context.buffers[channel] = pending
+                progressed = true
+            } else if n == 0 || (n < 0 && n != LIBSSH2_ERROR_EAGAIN) {
+                closed.append(channel)
+            }
+        }
+
+        for channel in closed {
+            libssh2_channel_close(channel)
+            libssh2_channel_free(channel)
+            context.channels.removeAll { $0 == channel }
+            context.buffers[channel] = nil
+        }
+        return progressed
+    }
+
+    /// Split one framed agent message (4-byte length + body) off the front of the
+    /// buffer, returning the body; nil if a whole frame isn't buffered yet.
+    private nonisolated static func takeFrame(_ buffer: inout [UInt8]) -> Data? {
+        guard buffer.count >= 4 else { return nil }
+        let length = (UInt32(buffer[0]) << 24) | (UInt32(buffer[1]) << 16)
+            | (UInt32(buffer[2]) << 8) | UInt32(buffer[3])
+        guard buffer.count >= 4 + Int(length) else { return nil }
+        let body = Data(buffer[4..<4 + Int(length)])
+        buffer.removeFirst(4 + Int(length))
+        return body
+    }
+
+    private nonisolated static func writeChannel(_ channel: OpaquePointer, _ data: Data) {
+        data.withUnsafeBytes { raw in
+            let base = raw.bindMemory(to: UInt8.self).baseAddress!
+            var sent = 0
+            while sent < raw.count {
+                let n = libssh2_channel_write_ex(channel, 0, base + sent, raw.count - sent)
+                if n == LIBSSH2_ERROR_EAGAIN { continue }
+                if n <= 0 { break }
+                sent += Int(n)
+            }
+        }
     }
 
     // MARK: - Host key
