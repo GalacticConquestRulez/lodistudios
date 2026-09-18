@@ -64,3 +64,15 @@ the `writeChannel` EAGAIN spin that wedged the loop on the second hop (above), t
 three-hops-in-a-row regression test. After that: the trust-direction cleanup on the hosts
 to-do list, and v0.1 close-out — the Board's `HostFacts` provider goes SSH-backed over the
 same transport.
+
+---
+
+# 0d0511a — the wedge fixed, three hops proven
+
+`writeChannel` now waits on the socket on `EAGAIN` (bounded at 64 stalls), and an agent-channel
+read error closes that channel only — the caller's loop never stops. No busy-spin remains in the
+transport. **Verified from greenflash's log:** hops from `10.116.0.6` at 19:00:04, 19:00:07 and
+19:00:10 — three in a row, three seconds apart — and the forwarded agent still answered
+`ssh-add -l` afterwards. **M6 closed, fix included.**
+
+The v0.1 transport is done. Remaining proof: M4's two-minute Wi-Fi drop on this build.
