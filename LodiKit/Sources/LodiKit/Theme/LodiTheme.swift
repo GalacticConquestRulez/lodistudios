@@ -28,7 +28,7 @@ public enum LodiPalette {
 /// is wayfinding: you know which tool you are in peripherally, before reading a
 /// word. The Assistant is deliberately *not* here — it crosses every tool and so
 /// carries pink (`LodiTheme.assistantAccent`), off the logo's palette on purpose.
-public enum LodiTool: String, CaseIterable, Identifiable, Sendable {
+public enum LodiTool: String, CaseIterable, Identifiable, Sendable, Codable {
     case terminal
     case webPro
     case appPro
