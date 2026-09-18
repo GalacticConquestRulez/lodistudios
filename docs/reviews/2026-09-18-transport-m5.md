@@ -21,3 +21,9 @@ of the line; `docs/hosts.md` gets the fingerprint.
 Then M6: request `auth_agent` on the terminal channel and service agent channels in
 `eventLoop` (factor the M2c loop into a shared helper), then `ssh greenflash` from a Sessions
 shell — and the agent logs the `session-bind` it received.
+
+---
+
+**M5 proven, 2026-09-18 18:41:49:** Sessions' auth log — `Accepted publickey for root … ECDSA
+SHA256:48ov0n3CH6TLc6dCizKw4EaBg9ALQBFwd25QVidLsg4`. The app authenticated with a key generated
+inside the Secure Enclave, with no prompt. **M5 closed.**
