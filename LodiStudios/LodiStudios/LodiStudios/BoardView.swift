@@ -4,7 +4,7 @@ import LodiKit
 /// The Board — the live front page: what is running, broken, waiting. v0.1 shows
 /// the host inventory read-only; runs and status land as the transport does.
 struct BoardView: View {
-    let hosts: [Host]
+    let hosts: [LodiKit.Host]
 
     var body: some View {
         ScrollView {
@@ -28,7 +28,7 @@ struct BoardView: View {
 }
 
 private struct HostRow: View {
-    let host: Host
+    let host: LodiKit.Host
 
     var body: some View {
         HStack(spacing: 12) {
