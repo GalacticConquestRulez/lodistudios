@@ -79,3 +79,6 @@ milestone: a terminal you type into, with the session living in the cloud. Close
 (second tab will crash the first), no self-pipe (idle-prompt keystrokes wait for `poll`),
 keystrokes bypass `PaneWriter`, session name hardcoded `lodi`. The commits since the review
 landed without pulling it. Pull, do the four, then M4.
+
+**Observed on the Mac, 2026-09-18:** "5 second delay between keystrokes" on an idle prompt —
+exactly the `poll` timeout. Fix 2 (self-pipe wake) is confirmed as the cause, not the network.

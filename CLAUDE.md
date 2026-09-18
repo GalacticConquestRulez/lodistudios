@@ -44,6 +44,13 @@ requests); the push relay joins the day the Apple Developer account clears (free
 until then — see docs/plan.md, "Before the developer account"). Then v0.2 SFTP / iOS parity / Live Activities / widgets, v0.3 control
 mode / FileProvider / on-device routing, v0.4 editing / constraints UI / Mosh.
 
+## Before every task and every commit: pull
+Reviews land on `main` from the droplet session as `docs/reviews/*.md`, often within minutes of
+a push. Run `git pull --rebase origin main` **before starting any task and again before each
+commit**, and read any review file that changed. A review item that is still open blocks the
+next milestone; do it first. Building on for four commits without pulling is how a known
+5-second keystroke lag shipped into the first terminal session.
+
 ## Verification
 Build with `xcodebuild` (or `swift build` for LodiKit) and run the LodiKit tests before
 reporting. Prove the Secure Enclave sign round-trip against the session droplet in week one.
