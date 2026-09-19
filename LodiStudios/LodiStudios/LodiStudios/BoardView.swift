@@ -9,7 +9,9 @@ struct BoardView: View {
     let hosts: [LodiKit.Host]
 
     @Environment(\.hostFacts) private var provider
+    @Environment(\.scenePhase) private var scenePhase
     @State private var facts: [String: [HostFact]] = [:]
+    @State private var asOf: [String: Date] = [:]
 
     var body: some View {
         ScrollView {
@@ -23,21 +25,31 @@ struct BoardView: View {
                     .foregroundStyle(LodiTheme.secondaryText)
 
                 ForEach(hosts) { host in
-                    HostCard(host: host, facts: facts[host.alias] ?? [])
+                    HostCard(host: host, facts: facts[host.alias] ?? [], asOf: asOf[host.alias])
                 }
             }
             .padding(24)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        // Vitals are cheap but each refresh is a login; 60s keeps the journal sane.
         .task(id: hosts.map(\.alias)) {
-            // Refresh on a loop so the Board stays live and picks up facts once the
-            // agent is ready; each host fills in as its facts return.
             while !Task.isCancelled {
-                for host in hosts {
-                    facts[host.alias] = await provider.facts(for: host)
-                }
-                try? await Task.sleep(for: .seconds(15))
+                await refreshAll()
+                try? await Task.sleep(for: .seconds(60))
             }
+        }
+        // A number the owner comes back to must be current, not an hour stale.
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { Task { await refreshAll() } }
+        }
+    }
+
+    /// Refresh every host, stamping when each returned so a stale number never
+    /// looks live. Each host fills in as its facts come back.
+    private func refreshAll() async {
+        for host in hosts {
+            facts[host.alias] = await provider.facts(for: host)
+            asOf[host.alias] = Date()
         }
     }
 }
@@ -45,6 +57,13 @@ struct BoardView: View {
 private struct HostCard: View {
     let host: LodiKit.Host
     let facts: [HostFact]
+    let asOf: Date?
+
+    private static let clock: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm:ss"
+        return formatter
+    }()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -60,9 +79,16 @@ private struct HostCard: View {
                     }
                 }
                 Spacer()
-                Text(host.hostName)
-                    .font(.system(.callout, design: .monospaced))
-                    .foregroundStyle(LodiTheme.secondaryText)
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(host.hostName)
+                        .font(.system(.callout, design: .monospaced))
+                        .foregroundStyle(LodiTheme.secondaryText)
+                    if let asOf {
+                        Text("as of \(Self.clock.string(from: asOf))")
+                            .font(.caption2)
+                            .foregroundStyle(LodiTheme.secondaryText)
+                    }
+                }
             }
 
             if !facts.isEmpty {
