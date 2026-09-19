@@ -42,5 +42,7 @@ Per `docs/plan.md` "Build order": **v0.2 — SFTP and the iPhone at parity.** On
    git on the Mac can use the same hosts and the Enclave key through the app's agent socket.
 
 Rules unchanged: keys through `PaneWriter`, output through `PaneOutputSink`, one agent per app,
-agent forwarding untouched, tests for every parser and for the SFTP path listing against real
-droplet output, commit messages that say why, pull before every task and every commit.
+agent forwarding untouched, tests for every parser, and — SFTP `readdir` being structured
+attributes, not `ls -l` text — `RemoteFile`'s formatters unit-tested with the live listing
+compared to `ls -la` on the droplet, commit messages that say why, pull before every task and
+every commit.

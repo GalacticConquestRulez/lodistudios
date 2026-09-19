@@ -40,8 +40,8 @@ Sessions into greenflash can use the private address.
   `User root`, `ForwardAgent no`; `known_hosts` is pre-seeded with greenflash's ECDSA and
   ed25519 host keys, so the hop never prompts. No key exists on Sessions for it: auth comes
   from the forwarded agent on the owner's device.
-- **Proof, from a terminal tab in the app:** `ssh greenflash 'hostname'` → `greenflash`
-  (whatever the GF box's hostname prints) with no key on Sessions; and the app's agent logs the
+- **Proof, from a terminal tab in the app:** `ssh greenflash hostname` → `GreenFlash` (the GF
+  box's hostname, renamed to `GreenFlash` on 2026-09-19) with no key on Sessions; and the app's agent logs the
   `session-bind` it received for the hop.
 
 ## To do
