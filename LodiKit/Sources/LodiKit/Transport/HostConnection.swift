@@ -39,6 +39,10 @@ public final class HostConnection: @unchecked Sendable, PaneBackend {
     private let lock = NSLock()
     private var inputQueue: [UInt8] = []
     private var pendingSize: (Int32, Int32)?
+    /// SFTP operations to run on the loop thread (the only thread that may touch
+    /// the libssh2 session). Each closure gets the SFTP handle (nil if it could not
+    /// be opened), the session and the socket, and resumes its own continuation.
+    private var sftpQueue: [(OpaquePointer?, OpaquePointer, Int32) -> Void] = []
     private var cols: Int32
     private var rows: Int32
     private var running = true
@@ -272,11 +276,21 @@ public final class HostConnection: @unchecked Sendable, PaneBackend {
         channel: OpaquePointer, session: OpaquePointer, sock: Int32, agentContext: AuthAgentContext
     ) throws {
         var buffer = [Int8](repeating: 0, count: 32_768)
+        // SFTP subsystem, opened lazily on the first op and torn down here so any
+        // still-queued op fails rather than hangs when the connection ends.
+        var sftp: OpaquePointer?
+        defer {
+            lock.lock(); let orphaned = sftpQueue; sftpQueue = []; lock.unlock()
+            for work in orphaned { work(nil, session, sock) }
+            if let sftp { libssh2_sftp_shutdown(sftp) }
+        }
+
         while true {
             lock.lock()
             let shouldStop = !running
             let input = inputQueue; inputQueue = []
             let size = pendingSize; pendingSize = nil
+            let sftpWork = sftpQueue; sftpQueue = []
             lock.unlock()
             if shouldStop { break }
 
@@ -287,6 +301,14 @@ public final class HostConnection: @unchecked Sendable, PaneBackend {
             }
             if !input.isEmpty {
                 writeAll(channel, input, session: session, sock: sock)
+                progressed = true
+            }
+
+            // Drain SFTP work: open the subsystem on first use, then run each op to
+            // completion (they are quick; transfers will chunk in a later step).
+            if !sftpWork.isEmpty {
+                if sftp == nil { sftp = Self.openSFTP(session, sock) }
+                for work in sftpWork { work(sftp, session, sock) }
                 progressed = true
             }
 
@@ -357,5 +379,154 @@ public final class HostConnection: @unchecked Sendable, PaneBackend {
                 sent += Int(n)
             }
         }
+    }
+}
+
+// MARK: - SFTP (a second client on the same connection)
+
+extension HostConnection {
+    public enum SFTPError: Error, Sendable, CustomStringConvertible {
+        case unavailable
+        case failed(String)
+        public var description: String {
+            switch self {
+            case .unavailable: "sftp not available (connection down)"
+            case .failed(let m): "sftp: \(m)"
+            }
+        }
+    }
+
+    /// List a directory (excludes `.` and `..`), directories first then by name.
+    public func list(_ path: String) async throws -> [RemoteFile] {
+        try await run { sftp, session, sock in try Self.sftpList(sftp, path: path, session: session, sock: sock) }
+    }
+
+    public func stat(_ path: String) async throws -> RemoteFile {
+        try await run { sftp, session, sock in try Self.sftpStat(sftp, path: path, session: session, sock: sock) }
+    }
+
+    public func makeDirectory(_ path: String) async throws {
+        try await run { sftp, session, sock in try Self.sftpMkdir(sftp, path: path, session: session, sock: sock) }
+    }
+
+    public func rename(_ from: String, to: String) async throws {
+        try await run { sftp, session, sock in try Self.sftpRename(sftp, from: from, to: to, session: session, sock: sock) }
+    }
+
+    public func remove(_ path: String, isDirectory: Bool) async throws {
+        try await run { sftp, session, sock in try Self.sftpRemove(sftp, path: path, isDirectory: isDirectory, session: session, sock: sock) }
+    }
+
+    /// Enqueue SFTP work onto the loop and await its result.
+    private func run<T: Sendable>(
+        _ body: @escaping @Sendable (OpaquePointer, OpaquePointer, Int32) throws -> T
+    ) async throws -> T {
+        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<T, Error>) in
+            lock.lock()
+            sftpQueue.append { sftp, session, sock in
+                guard let sftp else { cont.resume(throwing: SFTPError.unavailable); return }
+                do { cont.resume(returning: try body(sftp, session, sock)) }
+                catch { cont.resume(throwing: error) }
+            }
+            lock.unlock()
+            wake()
+        }
+    }
+
+    // MARK: SFTP primitives (run on the loop thread only)
+
+    /// Open the SFTP subsystem on the session, pumping EAGAIN. nil on failure.
+    static func openSFTP(_ session: OpaquePointer, _ sock: Int32) -> OpaquePointer? {
+        var handle: OpaquePointer?
+        repeat {
+            handle = libssh2_sftp_init(session)
+            if handle == nil {
+                if libssh2_session_last_errno(session) == LIBSSH2_ERROR_EAGAIN { SSHSession.waitSocket(sock, session); continue }
+                return nil
+            }
+        } while handle == nil
+        return handle
+    }
+
+    static func sftpList(_ sftp: OpaquePointer, path: String, session: OpaquePointer, sock: Int32) throws -> [RemoteFile] {
+        var handle: OpaquePointer?
+        repeat {
+            handle = path.withCString {
+                libssh2_sftp_open_ex(sftp, $0, UInt32(path.utf8.count), 0, 0, LIBSSH2_SFTP_OPENDIR)
+            }
+            if handle == nil {
+                if libssh2_session_last_errno(session) == LIBSSH2_ERROR_EAGAIN { SSHSession.waitSocket(sock, session); continue }
+                throw SFTPError.failed("opendir \(path)")
+            }
+        } while handle == nil
+        defer { _ = SSHSession.retry(session, sock) { libssh2_sftp_close_handle(handle) } }
+
+        var files: [RemoteFile] = []
+        var nameBuffer = [Int8](repeating: 0, count: 1024)
+        while true {
+            var attrs = LIBSSH2_SFTP_ATTRIBUTES()
+            let rc = libssh2_sftp_readdir_ex(handle, &nameBuffer, nameBuffer.count, nil, 0, &attrs)
+            if rc == Int(LIBSSH2_ERROR_EAGAIN) { SSHSession.waitSocket(sock, session); continue }
+            if rc <= 0 { break }   // 0 = end of directory
+            let name = String(decoding: nameBuffer.prefix(Int(rc)).map { UInt8(bitPattern: $0) }, as: UTF8.self)
+            if name == "." || name == ".." { continue }
+            let childPath = path.hasSuffix("/") ? path + name : "\(path)/\(name)"
+            files.append(RemoteFile(
+                name: name,
+                path: childPath,
+                size: attrs.filesize,
+                modified: Date(timeIntervalSince1970: Double(attrs.mtime)),
+                mode: UInt32(truncatingIfNeeded: attrs.permissions)
+            ))
+        }
+        files.sort { a, b in
+            if a.isDirectory != b.isDirectory { return a.isDirectory }
+            return a.name.lowercased() < b.name.lowercased()
+        }
+        return files
+    }
+
+    static func sftpStat(_ sftp: OpaquePointer, path: String, session: OpaquePointer, sock: Int32) throws -> RemoteFile {
+        var attrs = LIBSSH2_SFTP_ATTRIBUTES()
+        let rc = SSHSession.retry(session, sock) {
+            path.withCString { libssh2_sftp_stat_ex(sftp, $0, UInt32(path.utf8.count), 0, &attrs) }
+        }
+        guard rc == 0 else { throw SFTPError.failed("stat \(path) (\(rc))") }
+        let name = (path as NSString).lastPathComponent
+        return RemoteFile(
+            name: name, path: path, size: attrs.filesize,
+            modified: Date(timeIntervalSince1970: Double(attrs.mtime)),
+            mode: UInt32(truncatingIfNeeded: attrs.permissions)
+        )
+    }
+
+    static func sftpMkdir(_ sftp: OpaquePointer, path: String, session: OpaquePointer, sock: Int32) throws {
+        let rc = SSHSession.retry(session, sock) {
+            path.withCString { libssh2_sftp_mkdir_ex(sftp, $0, UInt32(path.utf8.count), 0o755) }
+        }
+        guard rc == 0 else { throw SFTPError.failed("mkdir \(path) (\(rc))") }
+    }
+
+    static func sftpRename(_ sftp: OpaquePointer, from: String, to: String, session: OpaquePointer, sock: Int32) throws {
+        let flags = Int(LIBSSH2_SFTP_RENAME_OVERWRITE | LIBSSH2_SFTP_RENAME_ATOMIC | LIBSSH2_SFTP_RENAME_NATIVE)
+        let rc = SSHSession.retry(session, sock) {
+            from.withCString { f in
+                to.withCString { t in
+                    libssh2_sftp_rename_ex(sftp, f, UInt32(from.utf8.count), t, UInt32(to.utf8.count), flags)
+                }
+            }
+        }
+        guard rc == 0 else { throw SFTPError.failed("rename \(from) → \(to) (\(rc))") }
+    }
+
+    static func sftpRemove(_ sftp: OpaquePointer, path: String, isDirectory: Bool, session: OpaquePointer, sock: Int32) throws {
+        let rc = SSHSession.retry(session, sock) {
+            path.withCString {
+                isDirectory
+                    ? libssh2_sftp_rmdir_ex(sftp, $0, UInt32(path.utf8.count))
+                    : libssh2_sftp_unlink_ex(sftp, $0, UInt32(path.utf8.count))
+            }
+        }
+        guard rc == 0 else { throw SFTPError.failed("remove \(path) (\(rc))") }
     }
 }
