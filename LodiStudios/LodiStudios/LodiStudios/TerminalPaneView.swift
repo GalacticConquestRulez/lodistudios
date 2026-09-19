@@ -7,22 +7,22 @@ import AppKit
 import UIKit
 #endif
 
-/// Hosts SwiftTerm's `TerminalView` and wires it to an `SSHTerminalSession`:
+/// Hosts SwiftTerm's `TerminalView` and wires it to an `HostConnection`:
 /// remote output feeds the view (as a `PaneOutputSink`), keystrokes and resizes go
 /// back to the session (docs/specs/transport-v0.1.md, milestone 3). One renderer
 /// on both platforms; only the chrome around it carries the tool accent.
 struct TerminalPaneView {
-    let session: SSHTerminalSession
+    let session: HostConnection
 
     final class Coordinator: NSObject, TerminalViewDelegate, PaneOutputSink {
-        let session: SSHTerminalSession
+        let session: HostConnection
         weak var terminal: TerminalView?
         private var started = false
         /// The one input door — a human's keys and an agent's send-keys alike go
         /// through the writer's policy gate, never straight to the backend.
         private lazy var writer = PaneWriter(backend: session)
 
-        init(session: SSHTerminalSession) { self.session = session }
+        init(session: HostConnection) { self.session = session }
 
         /// Bind the view, register as the output sink, and start the session once.
         func attach(_ terminal: TerminalView) {

@@ -4,7 +4,7 @@ import CLibSSH2
 /// Servicing for forwarded `auth-agent@openssh.com` channels — the app's agent
 /// reached from a remote shell (docs/reviews/2026-09-18-transport-m2.md and -m3).
 /// Shared by the one-shot exec path (SSHSession) and the interactive terminal
-/// (SSHTerminalSession), so `ssh-add -l`, `git push` and `ssh greenflash` inside a
+/// (HostConnection), so `ssh-add -l`, `git push` and `ssh greenflash` inside a
 /// tmux session all reach the same in-process responder. No socket on this path.
 ///
 /// Holds the channels the server opened plus the responder that answers them,

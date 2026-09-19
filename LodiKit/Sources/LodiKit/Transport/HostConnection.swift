@@ -2,10 +2,12 @@ import Foundation
 import Darwin
 import CLibSSH2
 
-/// A live, interactive SSH session: a PTY channel running tmux, its output fanned
-/// through a `PaneOutputBroadcaster` and its input taken behind `PaneBackend`
-/// (docs/specs/transport-v0.1.md, milestones 3 and 4). Reuses SSHSession's proven
-/// connect / host-key / agent-auth path.
+/// A per-host connection: one libssh2 session, its event loop, keepalives,
+/// reconnect and the forwarded agent (docs/specs/transport-v0.1.md, milestones
+/// 3–6). Its first client is the interactive PTY channel running tmux, whose
+/// output is fanned through a `PaneOutputBroadcaster` and whose input arrives
+/// behind `PaneBackend`; the SFTP subsystem joins as a second client on the same
+/// loop (v0.2), so Files and the terminal share one login.
 ///
 /// The dedicated loop reconnects on its own: when the channel ends (a tmux detach,
 /// a dropped network), it reports `.disconnected` and retries with backoff, then
@@ -16,7 +18,7 @@ import CLibSSH2
 /// Note: because any disconnect reattaches, a deliberate tmux detach (Ctrl-b d)
 /// reattaches within a second — leaving the session is done by closing the tab,
 /// not by detaching from inside it.
-public final class SSHTerminalSession: @unchecked Sendable, PaneBackend {
+public final class HostConnection: @unchecked Sendable, PaneBackend {
     public enum State: Sendable, Equatable {
         case connecting
         case connected

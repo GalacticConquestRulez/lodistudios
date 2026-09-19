@@ -9,13 +9,13 @@ import LodiKit
 @MainActor
 @Observable
 final class TerminalStore {
-    private var sessions: [String: SSHTerminalSession] = [:]
+    private var sessions: [String: HostConnection] = [:]
     private var agents: [String: SSHAgent] = [:]
     /// Observable per-host connection state, driving the reconnect banner.
-    private(set) var states: [String: SSHTerminalSession.State] = [:]
+    private(set) var states: [String: HostConnection.State] = [:]
 
     /// The session for a host, created and started on first request, reused after.
-    func session(for host: LodiKit.Host) -> SSHTerminalSession {
+    func session(for host: LodiKit.Host) -> HostConnection {
         if let existing = sessions[host.alias] { return existing }
 
         let keyStore = SSHKeyStore()
@@ -25,7 +25,7 @@ final class TerminalStore {
         states[host.alias] = .connecting
 
         let alias = host.alias
-        let session = SSHTerminalSession(
+        let session = HostConnection(
             host: host,
             keyStore: keyStore,
             agentSocketPath: agent.socketPath,
@@ -39,7 +39,7 @@ final class TerminalStore {
         return session
     }
 
-    func state(for host: LodiKit.Host) -> SSHTerminalSession.State {
+    func state(for host: LodiKit.Host) -> HostConnection.State {
         states[host.alias] ?? .connecting
     }
 }

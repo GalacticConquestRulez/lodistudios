@@ -2,12 +2,12 @@ import SwiftUI
 import LodiKit
 
 /// LodiTerminal (v0.1): a live tmux session on the Sessions droplet, rendered by
-/// SwiftTerm. The session lives in the TerminalStore, not here, so switching away
-/// and back does not disconnect — this view only attaches its sink and shows the
-/// reconnect banner when the connection is not up (M4).
+/// SwiftTerm. The connection lives in the TerminalStore, not here, so switching
+/// away and back does not disconnect — this view only attaches its sink and shows
+/// the reconnect banner when the connection is not up (M4).
 struct LodiTerminalView: View {
     @Environment(TerminalStore.self) private var store
-    @State private var session: SSHTerminalSession?
+    @State private var session: HostConnection?
 
     private var host: LodiKit.Host {
         HostInventory.known.first { $0.alias == "sessions" }
