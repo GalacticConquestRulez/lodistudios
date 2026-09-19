@@ -2,36 +2,40 @@ import Foundation
 
 /// The Board's real data: runs a small read-only script over the transport and
 /// parses the host's vitals into `HostFact`s (docs/ui-review.md, gap 1 — "the
-/// Board's data is nearly free"). Hosts reached only through a jump (greenflash,
-/// over the VPC) aren't directly reachable yet, so they fall back to the provided
-/// provider until onward-hop facts land.
+/// Board's data is nearly free"). It dials the host's directly-reachable address
+/// (the public IP when the inventory's hostName is a private/jump address).
 ///
-/// The parsers are pure and unit-tested; the provider just runs the script and
-/// feeds them, returning an honest "unreachable" fact on any failure rather than
-/// throwing.
+/// It never invents numbers: a host that can't be probed shows a single honest
+/// "Reachability" fact with `.unknown` status, not fabricated vitals. The parsers
+/// are pure and unit-tested. `FakeHostFactsProvider` lives only in previews/tests.
 public struct SSHHostFactsProvider: HostFactsProvider {
     /// One connection, one exec: cheap vitals with `###` section markers.
     static let script = "echo '###disk'; df -P /; echo '###mem'; free -m; echo '###load'; uptime"
 
     private let agentSocketPath: String
-    private let fallback: any HostFactsProvider
 
-    public init(agentSocketPath: String, fallback: any HostFactsProvider = FakeHostFactsProvider()) {
+    public init(agentSocketPath: String) {
         self.agentSocketPath = agentSocketPath
-        self.fallback = fallback
     }
 
     public func facts(for host: Host) async -> [HostFact] {
-        // Only directly-reachable hosts (no ProxyJump) for now.
-        guard host.proxyJump == nil else { return await fallback.facts(for: host) }
+        // Dial the directly-reachable address: the public IP if the inventory's
+        // hostName is a private/jump address, else hostName itself. A jump-only
+        // host can't be probed from here yet — say so, never invent numbers.
+        guard let dial = host.directHostName ?? (host.proxyJump == nil ? host.hostName : nil) else {
+            return [HostFact(id: "reach", label: "Reachability",
+                             value: "via jump — facts not yet available", status: .unknown)]
+        }
+        var target = host
+        target.hostName = dial
         do {
-            let output = try await SSHSession(host: host, agentSocketPath: agentSocketPath).run(Self.script)
+            let output = try await SSHSession(host: target, agentSocketPath: agentSocketPath).run(Self.script)
             let facts = Self.parse(output.stdout)
             return facts.isEmpty
                 ? [HostFact(id: "reach", label: "Reachability", value: "connected", status: .ok)]
                 : facts
         } catch {
-            return [HostFact(id: "reach", label: "Reachability", value: "unreachable", status: .fail)]
+            return [HostFact(id: "reach", label: "Reachability", value: "unreachable", status: .unknown)]
         }
     }
 

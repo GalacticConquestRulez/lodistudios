@@ -23,6 +23,10 @@ public struct Host: Identifiable, Sendable, Equatable, Codable {
     /// exactly as `ssh-keygen -l` prints). The transport refuses to connect on a
     /// mismatch; nil means "trust on first use, then pin" (docs/hosts.md).
     public var hostKeyFingerprintSHA256: String?
+    /// A publicly-reachable address for this Mac to dial directly, when `hostName`
+    /// is a private/VPC address used only for an onward hop. The Board probes this
+    /// so a jump-only inventory entry (greenflash) still shows real vitals.
+    public var directHostName: String?
 
     public var id: String { alias }
 
@@ -34,7 +38,8 @@ public struct Host: Identifiable, Sendable, Equatable, Codable {
         role: String? = nil,
         proxyJump: String? = nil,
         forwardAgent: Bool = false,
-        hostKeyFingerprintSHA256: String? = nil
+        hostKeyFingerprintSHA256: String? = nil,
+        directHostName: String? = nil
     ) {
         self.alias = alias
         self.hostName = hostName
@@ -44,5 +49,6 @@ public struct Host: Identifiable, Sendable, Equatable, Codable {
         self.proxyJump = proxyJump
         self.forwardAgent = forwardAgent
         self.hostKeyFingerprintSHA256 = hostKeyFingerprintSHA256
+        self.directHostName = directHostName
     }
 }

@@ -46,7 +46,10 @@ public final class HostInventory {
                 hostName: "10.116.0.2",
                 role: "client-facing: 17 sites, Green Flash Studio",
                 proxyJump: "sessions",
-                hostKeyFingerprintSHA256: "SHA256:m133JYrfac8FQ+3LCd28GMZQcYcJUg/4iIRNd4PBHp4"
+                hostKeyFingerprintSHA256: "SHA256:m133JYrfac8FQ+3LCd28GMZQcYcJUg/4iIRNd4PBHp4",
+                // The VPC hostName above is for the Sessions→greenflash hop; the Mac
+                // reaches greenflash directly on its public IP for the Board probe.
+                directHostName: "142.93.198.162"
             ),
         ]
     }
