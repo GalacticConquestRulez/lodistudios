@@ -25,11 +25,21 @@ public final class HostConnection: @unchecked Sendable, PaneBackend {
         case disconnected(reason: String?)
     }
 
+    /// What this connection is for. `.interactive` opens the PTY channel and runs
+    /// tmux (the terminal). `.bulk` skips the PTY entirely and serves only SFTP and
+    /// transfers, so a saturating upload never contends with keystroke echo on the
+    /// terminal's TCP connection (docs/specs/transport-v0.1.md, v0.2 note: bulk
+    /// transfers measured +18 ms echo when multiplexed onto the PTY link). It is a
+    /// second *instance* of this class — same handshake, auth, keepalive and
+    /// dead-link detection — not a second design.
+    public enum Role: Sendable { case interactive, bulk }
+
     /// Fan-out of remote output. Add a sink (the terminal view) any time.
     public let broadcaster = PaneOutputBroadcaster()
     public let pane: PaneID
 
     private let host: Host
+    private let role: Role
     private let keyStore: SSHKeyStore
     private let agentSocketPath: String?
     private let tmuxSession: String
@@ -43,6 +53,15 @@ public final class HostConnection: @unchecked Sendable, PaneBackend {
     /// the libssh2 session). Each closure gets the SFTP handle (nil if it could not
     /// be opened), the session and the socket, and resumes its own continuation.
     private var sftpQueue: [(OpaquePointer?, OpaquePointer, Int32) -> Void] = []
+    /// New transfer requests to start, and ids the caller asked to cancel — both
+    /// drained by the loop. One chunk moves per loop iteration so a big transfer
+    /// never starves keystroke echo.
+    private var transferRequests: [TransferRequest] = []
+    private var cancelledTransfers: Set<UUID> = []
+
+    /// Bytes moved per loop iteration. The PTY and SFTP channels share one TCP
+    /// connection, so transfer bytes contend with keystroke echo.
+    static let transferChunk = 32 * 1024
     private var cols: Int32
     private var rows: Int32
     private var running = true
@@ -56,6 +75,7 @@ public final class HostConnection: @unchecked Sendable, PaneBackend {
 
     public init(
         host: Host,
+        role: Role = .interactive,
         keyStore: SSHKeyStore = SSHKeyStore(),
         agentSocketPath: String? = nil,
         tmuxSession: String? = nil,
@@ -65,6 +85,7 @@ public final class HostConnection: @unchecked Sendable, PaneBackend {
         onState: @escaping @Sendable (State) -> Void = { _ in }
     ) {
         self.host = host
+        self.role = role
         self.keyStore = keyStore
         self.agentSocketPath = agentSocketPath
         self.tmuxSession = tmuxSession ?? "lodi-\(host.alias)"
@@ -87,7 +108,7 @@ public final class HostConnection: @unchecked Sendable, PaneBackend {
         lock.unlock()
 
         let thread = Thread { [weak self] in self?.loop() }
-        thread.name = "ssh-terminal"
+        thread.name = role == .bulk ? "ssh-bulk" : "ssh-terminal"
         thread.stackSize = 2 << 20
         thread.start()
     }
@@ -188,6 +209,17 @@ public final class HostConnection: @unchecked Sendable, PaneBackend {
         }
         try SSHSession.authenticateViaAgent(session, sock, socketPath: agentSocketPath, user: host.user)
 
+        // Bulk role: no PTY, no tmux — the session carries only SFTP and transfers.
+        // Same handshake/auth/keepalive above; the loop drains transfers and its
+        // defer fails anything in flight if the link drops (then loop() reconnects).
+        if role == .bulk {
+            everConnected = true
+            onState(.connected)
+            try eventLoop(channel: nil, session: session, sock: sock, agentContext: agentContext)
+            withExtendedLifetime(agentContext) {}
+            return
+        }
+
         // On a reconnect, if the tmux session is gone the server restarted; say so
         // once rather than silently showing a fresh empty pane (spec + M4 review).
         if everConnected, !hasSession(named: tmuxSession, session: session, sock: sock) {
@@ -273,15 +305,25 @@ public final class HostConnection: @unchecked Sendable, PaneBackend {
     }
 
     private func eventLoop(
-        channel: OpaquePointer, session: OpaquePointer, sock: Int32, agentContext: AuthAgentContext
+        channel: OpaquePointer?, session: OpaquePointer, sock: Int32, agentContext: AuthAgentContext
     ) throws {
         var buffer = [Int8](repeating: 0, count: 32_768)
         // SFTP subsystem, opened lazily on the first op and torn down here so any
         // still-queued op fails rather than hangs when the connection ends.
         var sftp: OpaquePointer?
+        var transfers: [ActiveTransfer] = []
         defer {
-            lock.lock(); let orphaned = sftpQueue; sftpQueue = []; lock.unlock()
-            for work in orphaned { work(nil, session, sock) }
+            // Fail anything queued or in flight so callers never hang.
+            lock.lock()
+            let orphanedSFTP = sftpQueue; sftpQueue = []
+            let orphanedReqs = transferRequests; transferRequests = []
+            lock.unlock()
+            for work in orphanedSFTP { work(nil, session, sock) }
+            for req in orphanedReqs { req.completion(.failure(SFTPError.unavailable)) }
+            for t in transfers {
+                t.close()
+                t.req.completion(.failure(SFTPError.failed("connection ended mid-transfer")))
+            }
             if let sftp { libssh2_sftp_shutdown(sftp) }
         }
 
@@ -291,41 +333,78 @@ public final class HostConnection: @unchecked Sendable, PaneBackend {
             let input = inputQueue; inputQueue = []
             let size = pendingSize; pendingSize = nil
             let sftpWork = sftpQueue; sftpQueue = []
+            let newTransfers = transferRequests; transferRequests = []
+            let cancels = cancelledTransfers
             lock.unlock()
             if shouldStop { break }
 
             var progressed = false
-            if let size {
+            if let channel, let size {
                 _ = libssh2_channel_request_pty_size_ex(channel, size.0, size.1, 0, 0)
                 progressed = true
             }
-            if !input.isEmpty {
+            if let channel, !input.isEmpty {
                 writeAll(channel, input, session: session, sock: sock)
                 progressed = true
             }
 
             // Drain SFTP work: open the subsystem on first use, then run each op to
-            // completion (they are quick; transfers will chunk in a later step).
+            // completion (they are quick; transfers chunk below).
             if !sftpWork.isEmpty {
                 if sftp == nil { sftp = Self.openSFTP(session, sock) }
                 for work in sftpWork { work(sftp, session, sock) }
                 progressed = true
             }
 
-            // Service any forwarded auth-agent channels (git push / ssh greenflash
-            // inside tmux reaching this app's agent).
-            if AuthAgentForwarding.service(agentContext, session: session, sock: sock) { progressed = true }
-
-            let n = libssh2_channel_read_ex(channel, 0, &buffer, buffer.count)
-            if n > 0 {
-                let bytes = buffer.prefix(n).map { UInt8(bitPattern: $0) }
-                broadcaster.broadcast(PaneChunk(pane: pane, bytes: bytes))
-                progressed = true
-            } else if n < 0 && n != LIBSSH2_ERROR_EAGAIN {
-                throw SSHSession.Failure.channel("read \(n)")   // dropped connection → reconnect
+            // Transfers: start new ones, then move ONE chunk per active transfer per
+            // iteration — the PTY is serviced between chunks, so echo stays snappy.
+            if !newTransfers.isEmpty || !transfers.isEmpty {
+                if sftp == nil { sftp = Self.openSFTP(session, sock) }
+                if let sftp {
+                    for req in newTransfers {
+                        if let active = Self.startTransfer(req, sftp: sftp, session: session, sock: sock) {
+                            transfers.append(active)
+                        }
+                    }
+                    var stillActive: [ActiveTransfer] = []
+                    for t in transfers {
+                        if cancels.contains(t.req.id) {
+                            Self.cancelTransfer(t, sftp: sftp, session: session, sock: sock)
+                            progressed = true
+                            continue
+                        }
+                        switch Self.step(t, session: session, sock: sock) {
+                        case .moved:        t.req.progress(t.transferred, t.total); progressed = true; stillActive.append(t)
+                        case .again:        stillActive.append(t)
+                        case .done:         t.close(); t.req.progress(t.total, t.total); t.req.completion(.success(())); progressed = true
+                        case .failed(let e): t.close(); t.req.completion(.failure(e)); progressed = true
+                        }
+                    }
+                    transfers = stillActive
+                    if !cancels.isEmpty { lock.lock(); cancelledTransfers.subtract(cancels); lock.unlock() }
+                } else {
+                    for req in newTransfers { req.completion(.failure(SFTPError.unavailable)) }
+                }
             }
 
-            if libssh2_channel_eof(channel) == 1 { break }      // clean detach
+            // Service any forwarded auth-agent channels (git push / ssh greenflash
+            // inside tmux reaching this app's agent). Only the interactive PTY link
+            // forwards the agent; the bulk link opens no such channels.
+            if channel != nil,
+               AuthAgentForwarding.service(agentContext, session: session, sock: sock) { progressed = true }
+
+            if let channel {
+                let n = libssh2_channel_read_ex(channel, 0, &buffer, buffer.count)
+                if n > 0 {
+                    let bytes = buffer.prefix(n).map { UInt8(bitPattern: $0) }
+                    broadcaster.broadcast(PaneChunk(pane: pane, bytes: bytes))
+                    progressed = true
+                } else if n < 0 && n != LIBSSH2_ERROR_EAGAIN {
+                    throw SSHSession.Failure.channel("read \(n)")   // dropped connection → reconnect
+                }
+
+                if libssh2_channel_eof(channel) == 1 { break }      // clean detach
+            }
 
             // Send a keepalive if one is due; a dead link errors here → reconnect.
             // Its "seconds to next" becomes the poll timeout so we wake to send it.
@@ -387,10 +466,12 @@ public final class HostConnection: @unchecked Sendable, PaneBackend {
 extension HostConnection {
     public enum SFTPError: Error, Sendable, CustomStringConvertible {
         case unavailable
+        case cancelled
         case failed(String)
         public var description: String {
             switch self {
             case .unavailable: "sftp not available (connection down)"
+            case .cancelled: "transfer cancelled"
             case .failed(let m): "sftp: \(m)"
             }
         }
@@ -528,5 +609,168 @@ extension HostConnection {
             }
         }
         guard rc == 0 else { throw SFTPError.failed("remove \(path) (\(rc))") }
+    }
+}
+
+// MARK: - Transfers (chunked, one step per loop iteration)
+
+public enum TransferDirection: Sendable { case upload, download }
+
+/// A queued transfer request. The closures are called from the loop thread; the
+/// app wraps them to hop to the main actor.
+struct TransferRequest {
+    let id: UUID
+    let direction: TransferDirection
+    let local: URL
+    let remote: String
+    let progress: @Sendable (UInt64, UInt64) -> Void
+    let completion: @Sendable (Result<Void, Error>) -> Void
+}
+
+/// In-flight transfer state; touched only on the loop thread.
+private final class ActiveTransfer {
+    let req: TransferRequest
+    let handle: OpaquePointer      // sftp file handle
+    let file: FileHandle           // local: reading (upload) or writing (download)
+    let total: UInt64
+    var transferred: UInt64 = 0
+    var uploadPending: [UInt8] = []
+    var uploadOffset = 0
+
+    init(req: TransferRequest, handle: OpaquePointer, file: FileHandle, total: UInt64) {
+        self.req = req; self.handle = handle; self.file = file; self.total = total
+    }
+    func close() {
+        libssh2_sftp_close_handle(handle)
+        try? file.close()
+    }
+}
+
+private enum StepOutcome { case moved, again, done, failed(Error) }
+
+extension HostConnection {
+    /// Queue an upload of a local file to a remote path.
+    @discardableResult
+    public func upload(
+        local: URL, to remote: String, id: UUID = UUID(),
+        progress: @escaping @Sendable (UInt64, UInt64) -> Void = { _, _ in },
+        completion: @escaping @Sendable (Result<Void, Error>) -> Void = { _ in }
+    ) -> UUID {
+        enqueueTransfer(TransferRequest(id: id, direction: .upload, local: local, remote: remote,
+                                        progress: progress, completion: completion))
+        return id
+    }
+
+    /// Queue a download of a remote path to a local file.
+    @discardableResult
+    public func download(
+        remote: String, to local: URL, id: UUID = UUID(),
+        progress: @escaping @Sendable (UInt64, UInt64) -> Void = { _, _ in },
+        completion: @escaping @Sendable (Result<Void, Error>) -> Void = { _ in }
+    ) -> UUID {
+        enqueueTransfer(TransferRequest(id: id, direction: .download, local: local, remote: remote,
+                                        progress: progress, completion: completion))
+        return id
+    }
+
+    public func cancelTransfer(_ id: UUID) {
+        lock.lock(); cancelledTransfers.insert(id); lock.unlock()
+        wake()
+    }
+
+    private func enqueueTransfer(_ req: TransferRequest) {
+        lock.lock(); transferRequests.append(req); lock.unlock()
+        wake()
+    }
+
+    // MARK: primitives (loop thread only)
+
+    static func openFile(_ sftp: OpaquePointer, _ path: String, flags: UInt, mode: Int,
+                         session: OpaquePointer, sock: Int32) -> OpaquePointer? {
+        var handle: OpaquePointer?
+        repeat {
+            handle = path.withCString {
+                libssh2_sftp_open_ex(sftp, $0, UInt32(path.utf8.count), flags, mode, LIBSSH2_SFTP_OPENFILE)
+            }
+            if handle == nil {
+                if libssh2_session_last_errno(session) == LIBSSH2_ERROR_EAGAIN { SSHSession.waitSocket(sock, session); continue }
+                return nil
+            }
+        } while handle == nil
+        return handle
+    }
+
+    fileprivate static func startTransfer(_ req: TransferRequest, sftp: OpaquePointer,
+                                          session: OpaquePointer, sock: Int32) -> ActiveTransfer? {
+        switch req.direction {
+        case .upload:
+            guard let file = try? FileHandle(forReadingFrom: req.local) else {
+                req.completion(.failure(SFTPError.failed("open local \(req.local.path)"))); return nil
+            }
+            let total = ((try? FileManager.default.attributesOfItem(atPath: req.local.path))?[.size] as? NSNumber)?.uint64Value ?? 0
+            let flags = UInt(LIBSSH2_FXF_WRITE | LIBSSH2_FXF_CREAT | LIBSSH2_FXF_TRUNC)
+            guard let handle = openFile(sftp, req.remote, flags: flags, mode: 0o644, session: session, sock: sock) else {
+                try? file.close(); req.completion(.failure(SFTPError.failed("open remote \(req.remote)"))); return nil
+            }
+            return ActiveTransfer(req: req, handle: handle, file: file, total: total)
+        case .download:
+            let total = (try? sftpStat(sftp, path: req.remote, session: session, sock: sock).size) ?? 0
+            guard let handle = openFile(sftp, req.remote, flags: UInt(LIBSSH2_FXF_READ), mode: 0, session: session, sock: sock) else {
+                req.completion(.failure(SFTPError.failed("open remote \(req.remote)"))); return nil
+            }
+            FileManager.default.createFile(atPath: req.local.path, contents: nil)
+            guard let file = try? FileHandle(forWritingTo: req.local) else {
+                libssh2_sftp_close_handle(handle); req.completion(.failure(SFTPError.failed("open local \(req.local.path)"))); return nil
+            }
+            return ActiveTransfer(req: req, handle: handle, file: file, total: total)
+        }
+    }
+
+    fileprivate static func step(_ t: ActiveTransfer, session: OpaquePointer, sock: Int32) -> StepOutcome {
+        switch t.req.direction {
+        case .download:
+            var buffer = [Int8](repeating: 0, count: transferChunk)
+            let n = libssh2_sftp_read(t.handle, &buffer, buffer.count)
+            if n == Int(LIBSSH2_ERROR_EAGAIN) { return .again }
+            if n == 0 { return .done }
+            if n < 0 { return .failed(SFTPError.failed("read \(n)")) }
+            do { try t.file.write(contentsOf: Data(bytes: buffer, count: n)) }
+            catch { return .failed(SFTPError.failed("local write")) }
+            t.transferred += UInt64(n)
+            return .moved
+        case .upload:
+            if t.uploadPending.isEmpty {
+                let data = t.file.readData(ofLength: transferChunk)
+                if data.isEmpty { return .done }
+                t.uploadPending = [UInt8](data); t.uploadOffset = 0
+            }
+            let remaining = t.uploadPending.count - t.uploadOffset
+            let n = t.uploadPending.withUnsafeBytes { raw -> Int in
+                let base = raw.bindMemory(to: Int8.self).baseAddress! + t.uploadOffset
+                return libssh2_sftp_write(t.handle, base, remaining)
+            }
+            if n == Int(LIBSSH2_ERROR_EAGAIN) { return .again }
+            if n < 0 { return .failed(SFTPError.failed("write \(n)")) }
+            t.uploadOffset += n
+            t.transferred += UInt64(n)
+            if t.uploadOffset >= t.uploadPending.count { t.uploadPending = []; t.uploadOffset = 0 }
+            return n > 0 ? .moved : .again
+        }
+    }
+
+    fileprivate static func cancelTransfer(_ t: ActiveTransfer, sftp: OpaquePointer,
+                                           session: OpaquePointer, sock: Int32) {
+        t.close()
+        switch t.req.direction {
+        case .download:
+            // Keep the partial bytes but mark them clearly.
+            let partial = t.req.local.appendingPathExtension("partial")
+            try? FileManager.default.removeItem(at: partial)
+            try? FileManager.default.moveItem(at: t.req.local, to: partial)
+        case .upload:
+            // Leave the partial remote file clearly marked, never a truncated real name.
+            try? sftpRename(sftp, from: t.req.remote, to: t.req.remote + ".partial", session: session, sock: sock)
+        }
+        t.req.completion(.failure(SFTPError.cancelled))
     }
 }

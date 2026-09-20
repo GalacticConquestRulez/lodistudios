@@ -63,8 +63,40 @@ From a Sessions shell, `ssh greenflash` using the forwarded agent. Then the onwa
 whole security design exists for: the agent logs the `session-bind` it received. Commit.
 
 ## Not in this spec
-SFTP (v0.2, `libssh2_sftp_*` over the same session), tmux control mode (v0.3), Mosh, the
-location keep-alive, destination-constraint enforcement (v0.4).
+SFTP (v0.2, `libssh2_sftp_*` — see the connection-split decision below), tmux control mode
+(v0.3), Mosh, the location keep-alive, destination-constraint enforcement (v0.4).
+
+## v0.2 decision — one PTY connection, one lazy bulk connection (revised 2026-09-19)
+The v0.2 plan was "SFTP over the same session" — one `HostConnection` multiplexing the PTY
+channel and the SFTP/transfer channels on one TCP link. Atomic SFTP ops (list/stat/mkdir/
+rename/remove) do run fine that way. **But a saturating transfer does not.** Measured against
+Sessions with the 20-keystroke echo probe running in a live pane (median echo, idle bracketed
+before *and* after so drift is visible):
+
+| | idle | during 50 MB upload | during 50 MB download | idle (after) |
+|---|---|---|---|---|
+| shared PTY link | 26.9 ms | 44.6 ms (**+17.7**) | 45.8 ms (**+18.8**) | 27.0 ms |
+
+The ~18 ms rise is over the ~10 ms echo budget and is inherent to sharing one TCP connection:
+the transfer is window-limited to one chunk per RTT (throughput scaled exactly with chunk size —
+32 KB→1.3 MB/s, 8 KB→0.3 MB/s), so shrinking the chunk only traded throughput without fixing
+the contention. It is head-of-line, not bandwidth.
+
+**Revised:** transfers move over a *second* `HostConnection` in a new `.bulk` role — no PTY, no
+tmux, SFTP and transfers only. It is a second *instance* of the same class (same handshake,
+agent auth, keepalive, dead-link detection and reconnect), not a second design; the original
+"one connection" decision was about avoiding two reconnect paths, and there is still exactly one
+implementation. The bulk link opens lazily on the first transfer and closes after ~60 s idle.
+`TransferQueue` owns it and is the single owner of progress and cancel. A transfer never touches
+the PTY connection. Re-measured on this split, echo during transfer is flat:
+
+| | idle | during 50 MB upload | during 50 MB download | idle (after) |
+|---|---|---|---|---|
+| split (PTY + bulk) | 28.9 ms | 28.3 ms (−0.6) | 27.3 ms (−1.6) | 29.0 ms |
+
+Cancel (either architecture): cut at 30 %, `TransferQueue` entry → `.cancelled`, the remote file
+is renamed to `<name>.partial` and stops within one 32 KB chunk of the cut — never a full file
+under the real name.
 
 ## Rules that apply throughout
 - Every user-facing action (connect, disconnect, reconnect, accept host key, copy public key)
