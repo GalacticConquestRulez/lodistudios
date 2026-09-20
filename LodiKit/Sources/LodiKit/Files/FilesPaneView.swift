@@ -166,7 +166,9 @@ public struct FilesPaneView: View {
                 .foregroundStyle(LodiTheme.text)
                 .focused($mkdirFocused)
                 .onSubmit { run("files.mkdir") }
+                #if os(macOS)
                 .onExitCommand { store.makingDirectory = false }
+                #endif
         }
         .onAppear { mkdirFocused = true }
     }
@@ -180,7 +182,9 @@ public struct FilesPaneView: View {
                 .foregroundStyle(LodiTheme.text)
                 .focused($renameFocused)
                 .onSubmit { run("files.rename") }
+                #if os(macOS)
                 .onExitCommand { store.renameTarget = nil }
+                #endif
         }
         .onAppear { renameFocused = true }
     }

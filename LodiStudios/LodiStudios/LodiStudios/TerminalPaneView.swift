@@ -58,6 +58,16 @@ struct TerminalPaneView {
         func clipboardRead(source: TerminalView) -> Data? { nil }
         func iTermContent(source: TerminalView, content: ArraySlice<UInt8>) {}
         func rangeChanged(source: TerminalView, startY: Int, endY: Int) {}
+
+        #if canImport(UIKit)
+        /// Pinch to change the terminal font size on iPhone/iPad (clamped 8–32 pt).
+        @objc func handlePinch(_ gesture: UIPinchGestureRecognizer) {
+            guard let terminal, gesture.state == .changed || gesture.state == .ended else { return }
+            let size = min(max(terminal.font.pointSize * gesture.scale, 8), 32)
+            terminal.font = terminal.font.withSize(size)
+            gesture.scale = 1
+        }
+        #endif
     }
 }
 
@@ -77,6 +87,9 @@ extension TerminalPaneView: UIViewRepresentable {
     func makeUIView(context: Context) -> TerminalView {
         let view = TerminalView(frame: CGRect(x: 0, y: 0, width: 900, height: 520))
         context.coordinator.attach(view)
+        let pinch = UIPinchGestureRecognizer(
+            target: context.coordinator, action: #selector(Coordinator.handlePinch(_:)))
+        view.addGestureRecognizer(pinch)
         return view
     }
     func updateUIView(_ uiView: TerminalView, context: Context) {}
