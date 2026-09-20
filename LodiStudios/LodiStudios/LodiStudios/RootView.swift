@@ -8,6 +8,7 @@ struct RootView: View {
     @Environment(HostInventory.self) private var inventory
     @Environment(CommandRegistry.self) private var registry
     @Environment(Navigator.self) private var navigator
+    @Environment(FilesStore.self) private var files
 
     var body: some View {
         NavigationSplitView {
@@ -52,6 +53,11 @@ struct RootView: View {
                         Label("Assistant", systemImage: "sparkles")
                     }
                     .keyboardShortcut("j", modifiers: .command)
+
+                    Button { run("files.browse") } label: {
+                        Label("Browse Files", systemImage: "folder")
+                    }
+                    .keyboardShortcut("f", modifiers: [.command, .shift])
                 }
             }
         }
@@ -59,6 +65,14 @@ struct RootView: View {
             if navigator.isPaletteVisible {
                 CommandPaletteView()
             }
+        }
+        .sheet(isPresented: Binding(
+            get: { files.isPresented },
+            set: { files.isPresented = $0 }
+        )) {
+            FilesPaneView()
+                .lodiTool(.terminal)
+                .preferredColorScheme(.dark)
         }
     }
 

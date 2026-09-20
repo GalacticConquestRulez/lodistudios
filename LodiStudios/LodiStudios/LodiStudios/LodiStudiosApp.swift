@@ -37,6 +37,7 @@ struct LodiStudiosApp: App {
     @State private var navigator = Navigator()
     @State private var requests = RequestsStore()
     @State private var terminals = TerminalStore()
+    @State private var files = FilesStore()
     /// The Board's own agent, so its periodic fact-gathering signs independently
     /// of the terminal sessions.
     @State private var boardAgent = SSHAgent(keyStore: SSHKeyStore(), comment: "lodistudios")
@@ -49,6 +50,7 @@ struct LodiStudiosApp: App {
                 .environment(navigator)
                 .environment(requests)
                 .environment(terminals)
+                .environment(files)
                 .environment(\.hostFacts, SSHHostFactsProvider(agentSocketPath: boardAgent.socketPath))
                 .preferredColorScheme(.dark)
                 .task {
@@ -139,5 +141,63 @@ struct LodiStudiosApp: App {
                 }
             )
         }
+
+        registerFilesCommands()
+    }
+
+    /// The Files pane's operations, one Command each so ⌘K, the Assistant and the
+    /// pane's own buttons all reach them through the registry — no bare actions.
+    /// Delete and overwrite are `isDestructive` and gate on the confirm sheet; the
+    /// byte-moving ones drive the host's `TransferQueue`.
+    @MainActor private func registerFilesCommands() {
+        let files = files
+        let terminals = terminals
+
+        registry.register([
+            Command(id: "files.browse", title: "Browse Files", tool: .terminal,
+                    keywords: ["sftp", "files", "upload", "download", "finder"]) { _ in
+                guard let host = HostInventory.known.first(where: { $0.alias == "sessions" }) else { return }
+                await MainActor.run {
+                    files.configure(host: host,
+                                    connection: terminals.session(for: host),
+                                    queue: terminals.transferQueue(for: host),
+                                    startPath: "/root")
+                    files.isPresented = true
+                }
+                await files.refresh()
+            },
+            Command(id: "files.refresh", title: "Refresh Files", tool: .terminal,
+                    keywords: ["reload", "sftp"]) { _ in await files.refresh() },
+            Command(id: "files.up", title: "Enclosing Folder", tool: .terminal,
+                    keywords: ["parent", "up", "back"]) { _ in await files.goUp() },
+            Command(id: "files.open", title: "Open Folder", tool: .terminal,
+                    keywords: ["enter", "into"]) { _ in await files.open(nil) },
+            Command(id: "files.mkdir.begin", title: "New Folder", tool: .terminal,
+                    keywords: ["mkdir", "directory", "create"]) { _ in
+                await MainActor.run { files.beginMakeDirectory() }
+            },
+            Command(id: "files.mkdir", title: "Create Folder", tool: .terminal,
+                    keywords: ["mkdir", "directory"]) { _ in await files.makeDirectory() },
+            Command(id: "files.rename.begin", title: "Rename", tool: .terminal,
+                    keywords: ["rename", "move"]) { _ in
+                await MainActor.run { files.beginRename(nil) }
+            },
+            Command(id: "files.rename", title: "Commit Rename", tool: .terminal,
+                    keywords: ["rename"]) { _ in await files.commitRename() },
+            Command(id: "files.upload", title: "Upload Files", tool: .terminal,
+                    keywords: ["upload", "put", "send", "drag"]) { _ in await files.performUpload() },
+            Command(id: "files.download", title: "Download File", tool: .terminal,
+                    keywords: ["download", "get", "fetch", "drag"]) { _ in
+                await MainActor.run { files.download(nil, to: FilesStore.downloadsDirectory()) }
+            },
+            Command(id: "files.delete", title: "Delete", tool: .terminal,
+                    keywords: ["remove", "rm", "trash"], isDestructive: true) { _ in
+                await MainActor.run { files.requestDelete(nil) }
+            },
+            Command(id: "files.confirm", title: "Confirm Destructive Action", tool: .terminal,
+                    keywords: ["confirm", "delete", "overwrite"], isDestructive: true) { _ in
+                await files.confirmPending()
+            },
+        ])
     }
 }

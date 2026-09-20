@@ -11,6 +11,7 @@ import LodiKit
 final class TerminalStore {
     private var sessions: [String: HostConnection] = [:]
     private var agents: [String: SSHAgent] = [:]
+    private var queues: [String: TransferQueue] = [:]
     /// Observable per-host connection state, driving the reconnect banner.
     private(set) var states: [String: HostConnection.State] = [:]
 
@@ -41,5 +42,17 @@ final class TerminalStore {
 
     func state(for host: LodiKit.Host) -> HostConnection.State {
         states[host.alias] ?? .connecting
+    }
+
+    /// The transfer queue for a host, created on first request and reused. It moves
+    /// bytes over its own lazy bulk connection (never the PTY link); it shares the
+    /// host's agent socket so it authenticates with the same Enclave key.
+    func transferQueue(for host: LodiKit.Host) -> TransferQueue {
+        if let existing = queues[host.alias] { return existing }
+        _ = session(for: host)   // ensure the host's agent is started
+        let queue = TransferQueue(host: host, keyStore: SSHKeyStore(),
+                                  agentSocketPath: agents[host.alias]?.socketPath)
+        queues[host.alias] = queue
+        return queue
     }
 }
