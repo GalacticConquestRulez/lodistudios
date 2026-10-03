@@ -59,7 +59,10 @@ Sessions into greenflash can use the private address.
 
 | **Tanner's MacBook Pro (M1 Max) — current: Secure Enclave** | ECDSA P-256 generated inside the Secure Enclave (`kSecAttrTokenIDSecureEnclave`, private-key-usage only, no prompt); never existed outside the chip | `SHA256:48ov0n3CH6TLc6dCizKw4EaBg9ALQBFwd25QVidLsg4` | 2026-09-18 |
 
-The iPhone gets its own key when the iOS build first runs; never copy a key between devices.
+| **Tanner's iPhone (`iphone-2`) — Secure Enclave** | ECDSA P-256 generated inside the Enclave on the first run of the iOS build; never left the phone. Authorised on **both** Sessions and greenflash (the hop) on 2026-09-19 | `SHA256:JeowxQeSo3m0xgweY5fgBQTn2x3NNj1bmNZPwbWm1yM` | 2026-09-19 |
+
+Each device generates its own key on first run; never copy a key between devices. greenflash's
+`authorized_keys` now holds two device keys — the Mac's and the iPhone's.
 Note on M1's key: ed25519 is a CryptoKit key stored as Keychain data (SecKey has no ed25519),
 so it is loadable in-process; the non-extractable key is the Secure Enclave P-256 one at
 milestone 5. The store's own comment says the same.

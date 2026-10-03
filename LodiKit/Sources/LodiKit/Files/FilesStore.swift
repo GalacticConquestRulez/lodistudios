@@ -198,6 +198,27 @@ public final class FilesStore {
         await refreshWhenTransfersSettle()
     }
 
+    /// Copy security-scoped files chosen in the document picker into a temp dir
+    /// (names preserved) and stage them for the next `files.upload`. This is the
+    /// iPhone "drag-in": there is no Finder, so import comes from the Files app via
+    /// the picker / share sheet, but it feeds the same upload command and queue.
+    public func stageImportedFiles(_ urls: [URL]) async {
+        var staged: [URL] = []
+        for url in urls {
+            let scoped = url.startAccessingSecurityScopedResource()
+            defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+            let dir = FileManager.default.temporaryDirectory
+                .appendingPathComponent("lodi-import-\(UUID().uuidString)", isDirectory: true)
+            do {
+                try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+                let dest = dir.appendingPathComponent(url.lastPathComponent)
+                try FileManager.default.copyItem(at: url, to: dest)
+                staged.append(dest)
+            } catch { errorText = "import \(url.lastPathComponent): \(error)" }
+        }
+        stageUploads(staged)
+    }
+
     /// Download the selected entry (or a given one) into a directory.
     public func download(_ file: RemoteFile?, to directory: URL) {
         guard let queue, let file = file ?? selectedFile, !file.isDirectory else { return }

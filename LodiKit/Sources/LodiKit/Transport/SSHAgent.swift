@@ -136,11 +136,15 @@ public final class SSHAgent: @unchecked Sendable {
     public init(keyStore: SSHKeyStore, comment: String, socketPath: String? = nil) {
         self.keyStore = keyStore
         self.comment = comment
-        // The container tmp dir keeps the path under AF_UNIX's 104-byte sun_path;
-        // a unique suffix lets several agents coexist (e.g. a terminal and a probe).
+        // AF_UNIX sun_path is only 104 bytes. iOS's container tmp dir is already
+        // ~81 chars (/var/mobile/Containers/Data/Application/<uuid>/tmp/), so the
+        // socket filename must stay short or bind() fails with "path too long" and
+        // agent auth dies with -42 (this is exactly what broke the first iPhone
+        // build). Keep it to ~14 chars; the short random suffix still lets several
+        // agents coexist (a terminal, a probe, the Board).
         self.socketPath = socketPath
             ?? FileManager.default.temporaryDirectory
-                .appendingPathComponent("lodi-agent-\(UUID().uuidString.prefix(8)).sock").path
+                .appendingPathComponent("la-\(UUID().uuidString.prefix(6)).sock").path
     }
 
     public func start() throws {

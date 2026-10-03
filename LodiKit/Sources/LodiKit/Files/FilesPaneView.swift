@@ -16,28 +16,35 @@ public struct FilesPaneView: View {
 
     @FocusState private var mkdirFocused: Bool
     @FocusState private var renameFocused: Bool
+    @State private var showingImporter = false
 
     public init() {}
 
     public var body: some View {
         @Bindable var store = store
-        VStack(spacing: 0) {
-            header
-            Divider().overlay(LodiPalette.paper.opacity(0.12))
-            listing
-            if !(store.queue?.transfers.isEmpty ?? true) {
-                Divider().overlay(LodiPalette.paper.opacity(0.12))
-                transfers
+        NavigationStack {
+            VStack(spacing: 0) {
+                listing
+                if !(store.queue?.transfers.isEmpty ?? true) {
+                    Divider().overlay(LodiPalette.paper.opacity(0.12))
+                    transfers
+                }
+                if let error = store.errorText {
+                    Text(error)
+                        .font(.caption).foregroundStyle(LodiTheme.statusFail)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 12).padding(.vertical, 6)
+                }
             }
-            if let error = store.errorText {
-                Text(error)
-                    .font(.caption).foregroundStyle(LodiTheme.statusFail)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 12).padding(.vertical, 6)
-            }
+            .background(LodiTheme.ground)
+            .navigationTitle(store.path)
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar { toolbarContent }
         }
-        .frame(minWidth: 480, minHeight: 420)
-        .background(LodiTheme.ground)
+        .frame(minWidth: 420, minHeight: 420)
+        .tint(accent)
         .task { await store.refresh() }
         .sheet(isPresented: Binding(
             get: { store.pendingConfirmation != nil },
@@ -49,43 +56,46 @@ public struct FilesPaneView: View {
                              onCancel: { store.cancelPending() })
             }
         }
+        // Import (the iPhone "drag-in"): pick files from the Files app, then upload
+        // through the same files.upload command and TransferQueue.
+        .fileImporter(isPresented: $showingImporter,
+                      allowedContentTypes: [.item],
+                      allowsMultipleSelection: true) { result in
+            if case .success(let urls) = result {
+                Task { await store.stageImportedFiles(urls); await runAsync("files.upload") }
+            }
+        }
     }
 
-    // MARK: - Header (all operations are Commands)
+    // MARK: - Toolbar (all operations are Commands; overflow into a menu so nothing
+    // clips on a narrow iPhone).
 
-    private var header: some View {
-        HStack(spacing: 10) {
+    @ToolbarContentBuilder private var toolbarContent: some ToolbarContent {
+        ToolbarItemGroup(placement: .cancellationAction) {
+            Button("Done") { store.isPresented = false }
             Button { run("files.up") } label: { Image(systemName: "chevron.up") }
                 .keyboardShortcut(.upArrow, modifiers: .command)
-                .help("Enclosing folder (⌘↑)")
-
-            Text(store.path)
-                .font(.system(.callout, design: .monospaced))
-                .foregroundStyle(LodiTheme.text)
-                .lineLimit(1).truncationMode(.head)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            Button { run("files.refresh") } label: { Image(systemName: "arrow.clockwise") }
-                .keyboardShortcut("r", modifiers: .command)
-                .help("Refresh (⌘R)")
+        }
+        ToolbarItemGroup(placement: .primaryAction) {
             Button { run("files.mkdir.begin") } label: { Image(systemName: "folder.badge.plus") }
                 .keyboardShortcut("n", modifiers: .command)
-                .help("New Folder (⌘N)")
-            Button { run("files.rename.begin") } label: { Image(systemName: "pencil") }
-                .keyboardShortcut("r", modifiers: [.command, .shift])
-                .disabled(store.selectedFile == nil)
-                .help("Rename (⌘⇧R)")
-            Button { run("files.download") } label: { Image(systemName: "arrow.down.circle") }
-                .keyboardShortcut("d", modifiers: .command)
-                .disabled(store.selectedFile?.isDirectory ?? true)
-                .help("Download to Downloads (⌘D)")
-            Button(role: .destructive) { run("files.delete") } label: { Image(systemName: "trash") }
-                .keyboardShortcut(.delete, modifiers: .command)
-                .disabled(store.selectedFile == nil)
-                .help("Delete (⌘⌫)")
+            Button { showingImporter = true } label: { Image(systemName: "square.and.arrow.down") }
+                .keyboardShortcut("i", modifiers: .command)
+            Menu {
+                Button { run("files.refresh") } label: { Label("Refresh", systemImage: "arrow.clockwise") }
+                    .keyboardShortcut("r", modifiers: .command)
+                Button { run("files.rename.begin") } label: { Label("Rename", systemImage: "pencil") }
+                    .keyboardShortcut("r", modifiers: [.command, .shift])
+                    .disabled(store.selectedFile == nil)
+                Button { run("files.download") } label: { Label("Download", systemImage: "arrow.down.circle") }
+                    .keyboardShortcut("d", modifiers: .command)
+                    .disabled(store.selectedFile?.isDirectory ?? true)
+                Divider()
+                Button(role: .destructive) { run("files.delete") } label: { Label("Delete", systemImage: "trash") }
+                    .keyboardShortcut(.delete, modifiers: .command)
+                    .disabled(store.selectedFile == nil)
+            } label: { Image(systemName: "ellipsis.circle") }
         }
-        .padding(.horizontal, 12).padding(.vertical, 8)
-        .tint(accent)
     }
 
     // MARK: - Listing
@@ -145,6 +155,8 @@ public struct FilesPaneView: View {
                     Button("Open") { store.selection = file.id; run("files.open") }
                 } else {
                     Button("Download") { store.selection = file.id; run("files.download") }
+                    ShareLink("Share…", item: RemoteFileExport(store: store, file: file),
+                              preview: SharePreview(file.name))
                 }
                 Button("Rename…") { store.selection = file.id; run("files.rename.begin") }
                 Divider()
@@ -247,6 +259,10 @@ public struct FilesPaneView: View {
 
     private func run(_ id: String) {
         Task { try? await registry.run(id) }
+    }
+
+    private func runAsync(_ id: String) async {
+        try? await registry.run(id)
     }
 }
 
